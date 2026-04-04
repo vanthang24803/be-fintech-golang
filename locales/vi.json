@@ -1,0 +1,39 @@
+{
+  "common": {
+    "success": "Thành công",
+    "error": "Lỗi",
+    "unauthorized": "Truy cập không hợp lệ",
+    "bad_request": "Yêu cầu không hợp lệ",
+    "not_found": "Không tìm thấy dữ liệu",
+    "internal_error": "Lỗi máy chủ nội bộ"
+  },
+  "auth": {
+    "register_success": "Đăng ký người dùng thành công",
+    "login_success": "Đăng nhập thành công",
+    "logout_success": "Đăng xuất thành công",
+    "refresh_success": "Làm mới token thành công",
+    "invalid_credentials": "Tài khoản hoặc mật khẩu không chính xác"
+  },
+  "budget": {
+    "create_success": "Tạo ngân sách thành công",
+    "list_success": "Lấy danh sách ngân sách thành công",
+    "detail_success": "Lấy chi tiết ngân sách thành công",
+    "update_success": "Cập nhật ngân sách thành công",
+    "delete_success": "Xóa ngân sách thành công",
+    "warning": "Cảnh báo Ngân sách: Bạn đã đạt {{progress}}% mức giới hạn.",
+    "exceeded": "Vượt Ngân sách! Bạn đã tiêu quá {{spent}} so với hạn mức {{limit}}."
+  },
+  "security": {
+    "fido_required": "Yêu cầu xác thực sinh trắc học để tiếp tục"
+  },
+  "transaction": {
+    "create_success": "Ghi nhận giao dịch thành công",
+    "list_success": "Lấy danh sách giao dịch thành công"
+  },
+  "goals": {
+    "create_success": "Tạo mục tiêu thành công",
+    "contribute_success": "Nạp tiền vào mục tiêu nhà thành công",
+    "withdraw_success": "Rút tiền về quỹ thành công",
+    "goal_reached": "Chúc mừng! Bạn đã hoàn thành mục tiêu: {{name}}"
+  }
+}

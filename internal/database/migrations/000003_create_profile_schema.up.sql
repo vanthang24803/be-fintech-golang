@@ -1,0 +1,11 @@
+CREATE TABLE IF NOT EXISTS profiles (
+    id BIGINT PRIMARY KEY,
+    user_id BIGINT UNIQUE NOT NULL,
+    full_name VARCHAR(255),
+    avatar_url TEXT,
+    phone_number VARCHAR(20),
+    date_of_birth DATE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_profile_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);

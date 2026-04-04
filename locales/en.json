@@ -1,0 +1,39 @@
+{
+  "common": {
+    "success": "Success",
+    "error": "Error",
+    "unauthorized": "Unauthorized access",
+    "bad_request": "Invalid request",
+    "not_found": "Resource not found",
+    "internal_error": "Internal server error"
+  },
+  "auth": {
+    "register_success": "User registered successfully",
+    "login_success": "Login successful",
+    "logout_success": "Logout successful",
+    "refresh_success": "Token refreshed successfully",
+    "invalid_credentials": "Invalid username or password"
+  },
+  "budget": {
+    "create_success": "Budget created successfully",
+    "list_success": "Budgets fetched successfully",
+    "detail_success": "Budget details fetched successfully",
+    "update_success": "Budget updated successfully",
+    "delete_success": "Budget deleted successfully",
+    "warning": "Budget Warning: You have reached {{progress}}% of your limit.",
+    "exceeded": "Budget Exceeded! You have spent {{spent}} over your {{limit}} limit."
+  },
+  "security": {
+    "fido_required": "Biometric authentication required to continue"
+  },
+  "transaction": {
+    "create_success": "Transaction recorded successfully",
+    "list_success": "Transactions fetched successfully"
+  },
+  "goals": {
+    "create_success": "Savings goal created successfully",
+    "contribute_success": "Funded savings goal successfully",
+    "withdraw_success": "Withdrawn from goal successfully",
+    "goal_reached": "Congratulations! You have reached your goal: {{name}}"
+  }
+}
