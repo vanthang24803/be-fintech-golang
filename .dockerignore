@@ -1,0 +1,15 @@
+.git
+.gitignore
+.env
+.env.*
+Dockerfile*
+docker-compose*.yml
+README.md
+docs/
+.agents/
+.agent/
+.codex/
+tmp/
+bin/
+dist/
+coverage/

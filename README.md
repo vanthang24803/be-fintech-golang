@@ -11,6 +11,7 @@ Backend service for a personal finance application built with Go, Fiber, Postgre
 - PostgreSQL persistence with embedded automatic migrations on startup
 - Redis-backed async jobs for notifications and background processing
 - OpenAPI spec with Scalar Docs served by the API
+- Docker deployment with a production-oriented multi-stage image
 
 ## Tech Stack
 
@@ -71,7 +72,7 @@ Common optional values:
 - `GOOGLE_CLIENT_SECRET`
 - `GOOGLE_REDIRECT_URL`
 - `FIREBASE_SERVICE_ACCOUNT_JSON`
-- `REDIS_ADDR`
+- `REDIS_URL`
 - `REDIS_PASSWORD`
 - `WEBAUTHN_RP_ID`
 - `WEBAUTHN_RP_NAME`
@@ -102,6 +103,39 @@ Notes:
 - Database migrations run automatically during startup from `internal/database/migrations/`.
 - The server listens on `PORT`, which defaults to `8386`.
 - If Firebase credentials are missing, the app falls back to a mock push client.
+
+## Docker Deployment
+
+Build the production image:
+
+```bash
+docker build -t expense-manager-api:latest .
+```
+
+Run the full stack with Docker Compose:
+
+```bash
+docker compose up --build -d
+```
+
+Inspect container logs:
+
+```bash
+docker compose logs -f app
+```
+
+Stop the stack:
+
+```bash
+docker compose down
+```
+
+Notes:
+
+- The `app` container listens on port `8386` inside the container.
+- The Compose stack wires the API to `postgres` and `redis` by service name.
+- PostgreSQL data and Redis data are persisted in named Docker volumes.
+- If you need Firebase in containers, mount the credential file and keep `FIREBASE_SERVICE_ACCOUNT_JSON` pointed at that in-container path.
 
 ## API Docs
 

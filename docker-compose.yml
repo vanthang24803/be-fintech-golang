@@ -1,7 +1,40 @@
 services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: expense_manager_api
+    environment:
+      PORT: ${PORT:-8386}
+      DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@postgres:5432/go_backend?sslmode=disable}
+      REDIS_URL: ${REDIS_URL:-redis:6379}
+      JWT_SECRET: ${JWT_SECRET:-super_secret_jwt_key_for_dev_only}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-super_secret_refresh_key_for_dev_only}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URL: ${GOOGLE_REDIRECT_URL:-http://localhost:8386/api/v1/auth/google/callback}
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON:-configs/firebase-service-account.json}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-localhost}
+      WEBAUTHN_RP_NAME: ${WEBAUTHN_RP_NAME:-Expense Manager}
+      WEBAUTHN_ORIGIN: ${WEBAUTHN_ORIGIN:-http://localhost:8386}
+    ports:
+      - "${PORT:-8386}:8386"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8386/"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
   postgres:
-    image: postgres:latest
-    container_name: go_backend_db
+    image: postgres:16-alpine
+    container_name: expense_manager_db
     environment:
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
@@ -9,15 +42,26 @@ services:
     ports:
       - "${DB_PORT:-5432}:5432"
     volumes:
-      - pgdata:/var/lib/postgresql
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-go_backend}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
+
   redis:
-    image: redis:latest
-    container_name: go_backend_redis
+    image: redis:7-alpine
+    container_name: expense_manager_redis
     ports:
       - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
     restart: unless-stopped
 
 volumes:
