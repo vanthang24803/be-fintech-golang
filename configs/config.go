@@ -18,6 +18,11 @@ type Config struct {
 	WebAuthnRPID            string
 	WebAuthnRPName          string
 	WebAuthnOrigin          string
+	MinioEndpoint           string
+	MinioAccessKey          string
+	MinioSecretKey          string
+	MinioUseSSL             bool
+	MinioBucketName         string
 }
 
 // LoadConfig initializes the configuration struct from environment variables
@@ -37,6 +42,11 @@ func LoadConfig() *Config {
 		WebAuthnRPID:            getEnv("WEBAUTHN_RP_ID", "localhost"),
 		WebAuthnRPName:          getEnv("WEBAUTHN_RP_NAME", "Expense Manager"),
 		WebAuthnOrigin:          getEnv("WEBAUTHN_ORIGIN", "http://localhost:8386"),
+		MinioEndpoint:           getEnv("MINIO_ENDPOINT", "localhost:9000"),
+		MinioAccessKey:          getEnv("MINIO_ACCESS_KEY", "minioadmin"),
+		MinioSecretKey:          getEnv("MINIO_SECRET_KEY", "minioadmin"),
+		MinioUseSSL:             getEnv("MINIO_USE_SSL", "false") == "true",
+		MinioBucketName:         getEnv("MINIO_BUCKET_NAME", "expense-manager"),
 	}
 }
 

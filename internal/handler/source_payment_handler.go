@@ -7,6 +7,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/maynguyen24/sever/internal/models"
 	"github.com/maynguyen24/sever/pkg/response"
+	"github.com/maynguyen24/sever/pkg/validator"
 )
 
 type SourcePaymentService interface {
@@ -48,6 +49,10 @@ func (h *SourcePaymentHandler) Create(c *fiber.Ctx) error {
 	var req models.CreateSourcePaymentRequest
 	if err := c.BodyParser(&req); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid request body")
+	}
+
+	if err := validator.Validate(&req); err != nil {
+		return err
 	}
 
 	source, err := h.service.Create(c.Context(), userID, &req)
@@ -108,6 +113,10 @@ func (h *SourcePaymentHandler) Update(c *fiber.Ctx) error {
 	var req models.UpdateSourcePaymentRequest
 	if err := c.BodyParser(&req); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid request body")
+	}
+
+	if err := validator.Validate(&req); err != nil {
+		return err
 	}
 
 	source, err := h.service.Update(c.Context(), id, userID, &req)

@@ -7,6 +7,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/maynguyen24/sever/internal/models"
 	"github.com/maynguyen24/sever/pkg/response"
+	"github.com/maynguyen24/sever/pkg/validator"
 )
 
 // FundService defines the contract for the handler layer
@@ -38,6 +39,10 @@ func (h *FundHandler) Create(c *fiber.Ctx) error {
 	var req models.CreateFundRequest
 	if err := c.BodyParser(&req); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid request body")
+	}
+
+	if err := validator.Validate(&req); err != nil {
+		return err
 	}
 
 	fund, err := h.service.Create(c.Context(), userID, &req)
@@ -100,6 +105,10 @@ func (h *FundHandler) Update(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid request body")
 	}
 
+	if err := validator.Validate(&req); err != nil {
+		return err
+	}
+
 	fund, err := h.service.Update(c.Context(), id, userID, &req)
 	if err != nil {
 		return err
@@ -144,6 +153,10 @@ func (h *FundHandler) Deposit(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid request body")
 	}
 
+	if err := validator.Validate(&req); err != nil {
+		return err
+	}
+
 	fund, err := h.service.Deposit(c.Context(), id, userID, &req)
 	if err != nil {
 		return err
@@ -167,6 +180,10 @@ func (h *FundHandler) Withdraw(c *fiber.Ctx) error {
 	var req models.FundTransactionRequest
 	if err := c.BodyParser(&req); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid request body")
+	}
+
+	if err := validator.Validate(&req); err != nil {
+		return err
 	}
 
 	fund, err := h.service.Withdraw(c.Context(), id, userID, &req)

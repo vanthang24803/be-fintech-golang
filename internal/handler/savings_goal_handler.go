@@ -7,6 +7,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/maynguyen24/sever/internal/models"
 	"github.com/maynguyen24/sever/pkg/response"
+	"github.com/maynguyen24/sever/pkg/validator"
 )
 
 type SavingsGoalService interface {
@@ -33,6 +34,10 @@ func (h *SavingsGoalHandler) Create(c *fiber.Ctx) error {
 	var req models.CreateGoalRequest
 	if err := c.BodyParser(&req); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "common.bad_request")
+	}
+
+	if err := validator.Validate(&req); err != nil {
+		return err
 	}
 
 	res, err := h.service.Create(c.Context(), userID, &req)
@@ -84,6 +89,10 @@ func (h *SavingsGoalHandler) Contribute(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "common.bad_request")
 	}
 
+	if err := validator.Validate(&req); err != nil {
+		return err
+	}
+
 	res, err := h.service.Contribute(c.Context(), userID, &req)
 	if err != nil {
 		return err
@@ -100,6 +109,10 @@ func (h *SavingsGoalHandler) Withdraw(c *fiber.Ctx) error {
 	var req models.GoalWithdrawRequest
 	if err := c.BodyParser(&req); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "common.bad_request")
+	}
+
+	if err := validator.Validate(&req); err != nil {
+		return err
 	}
 
 	res, err := h.service.Withdraw(c.Context(), userID, &req)
