@@ -23,13 +23,18 @@ type Config struct {
 	MinioSecretKey          string
 	MinioUseSSL             bool
 	MinioBucketName         string
+	SMTPHost                string
+	SMTPPort                string
+	SMTPUser                string
+	SMTPPass                string
+	SMTPFrom                string
 }
 
 // LoadConfig initializes the configuration struct from environment variables
 func LoadConfig() *Config {
 	return &Config{
 		AppEnv:                  getEnv("APP_ENV", "development"),
-		Port:                    getEnv("PORT", "8386"), // Default to 8386 per user setup
+		Port:                    getEnv("PORT", "8386"), // Default to 8386 per setup
 		DatabaseURL:             os.Getenv("DATABASE_URL"),
 		JWTSecret:               getEnv("JWT_SECRET", "super_secret_jwt_key_for_dev_only"),
 		JWTRefreshSecret:        getEnv("JWT_REFRESH_SECRET", "super_secret_refresh_key_for_dev_only"),
@@ -47,6 +52,11 @@ func LoadConfig() *Config {
 		MinioSecretKey:          getEnv("MINIO_SECRET_KEY", "minioadmin"),
 		MinioUseSSL:             getEnv("MINIO_USE_SSL", "false") == "true",
 		MinioBucketName:         getEnv("MINIO_BUCKET_NAME", "expense-manager"),
+		SMTPHost:                getEnv("SMTP_HOST", "smtp.gmail.com"),
+		SMTPPort:                getEnv("SMTP_PORT", "587"),
+		SMTPUser:                os.Getenv("SMTP_USER"),
+		SMTPPass:                os.Getenv("SMTP_PASS"),
+		SMTPFrom:                getEnv("SMTP_FROM", "no-reply@expensemanager.com"),
 	}
 }
 

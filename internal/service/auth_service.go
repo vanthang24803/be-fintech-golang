@@ -10,6 +10,7 @@ import (
 	"github.com/maynguyen24/sever/internal/models"
 	"github.com/maynguyen24/sever/pkg/apperr"
 	jwtUtil "github.com/maynguyen24/sever/pkg/jwt"
+	"github.com/maynguyen24/sever/pkg/mailer"
 	"github.com/maynguyen24/sever/pkg/snowflake"
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/oauth2"
@@ -27,12 +28,13 @@ type TokenRepository interface {
 type AuthService struct {
 	userRepo   UserRepository
 	tokenRepo  TokenRepository
+	mailer     mailer.Mailer
 	cfg        *configs.Config
 	oauthState string
 	googleCfg  *oauth2.Config
 }
 
-func NewAuthService(userRepo UserRepository, tokenRepo TokenRepository, cfg *configs.Config) *AuthService {
+func NewAuthService(userRepo UserRepository, tokenRepo TokenRepository, mailer mailer.Mailer, cfg *configs.Config) *AuthService {
 	googleCfg := &oauth2.Config{
 		ClientID:     cfg.GoogleClientID,
 		ClientSecret: cfg.GoogleClientSecret,
@@ -47,6 +49,7 @@ func NewAuthService(userRepo UserRepository, tokenRepo TokenRepository, cfg *con
 	return &AuthService{
 		userRepo:   userRepo,
 		tokenRepo:  tokenRepo,
+		mailer:     mailer,
 		cfg:        cfg,
 		oauthState: "pseudo-random-state", // In production, this should be dynamic and stored in session/cookie
 		googleCfg:  googleCfg,
