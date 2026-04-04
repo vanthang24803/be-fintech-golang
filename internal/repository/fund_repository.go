@@ -7,6 +7,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/maynguyen24/sever/internal/models"
+	"github.com/maynguyen24/sever/pkg/apperr"
 	"github.com/maynguyen24/sever/pkg/snowflake"
 )
 
@@ -99,7 +100,7 @@ func (r *FundRepository) Delete(id, userID int64) error {
 	}
 	rows, _ := result.RowsAffected()
 	if rows == 0 {
-		return fmt.Errorf("fund not found")
+		return apperr.ErrNotFound
 	}
 	return nil
 }
@@ -116,7 +117,7 @@ func (r *FundRepository) Deposit(id, userID int64, amount float64) (*models.Fund
 	err := r.db.QueryRowx(query, amount, id, userID).StructScan(&fund)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("fund not found")
+			return nil, apperr.ErrNotFound
 		}
 		return nil, fmt.Errorf("failed to deposit: %w", err)
 	}
@@ -141,9 +142,9 @@ func (r *FundRepository) Withdraw(id, userID int64, amount float64) (*models.Fun
 				return nil, checkErr
 			}
 			if existing == nil {
-				return nil, fmt.Errorf("fund not found")
+				return nil, apperr.ErrNotFound
 			}
-			return nil, fmt.Errorf("insufficient balance")
+			return nil, apperr.ErrInsufficientBalance
 		}
 		return nil, fmt.Errorf("failed to withdraw: %w", err)
 	}

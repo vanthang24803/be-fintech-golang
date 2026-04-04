@@ -8,7 +8,6 @@ import (
 	"github.com/maynguyen24/sever/pkg/response"
 )
 
-// SourcePaymentService defines the contract for the handler layer
 type SourcePaymentService interface {
 	Create(userID int64, req *models.CreateSourcePaymentRequest) (*models.SourcePayment, error)
 	GetAll(userID int64) ([]*models.SourcePayment, error)

@@ -1,10 +1,12 @@
 package service
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/maynguyen24/sever/internal/models"
+	"github.com/maynguyen24/sever/pkg/apperr"
 )
 
 // FundRepository defines the DB contract for this service
@@ -96,7 +98,7 @@ func (s *FundService) Update(id, userID int64, req *models.UpdateFundRequest) (*
 
 func (s *FundService) Delete(id, userID int64) error {
 	if err := s.repo.Delete(id, userID); err != nil {
-		if err.Error() == "fund not found" {
+		if errors.Is(err, apperr.ErrNotFound) {
 			return fiber.NewError(fiber.StatusNotFound, "Fund not found")
 		}
 		return err
@@ -111,7 +113,7 @@ func (s *FundService) Deposit(id, userID int64, req *models.FundTransactionReque
 
 	fund, err := s.repo.Deposit(id, userID, req.Amount)
 	if err != nil {
-		if err.Error() == "fund not found" {
+		if errors.Is(err, apperr.ErrNotFound) {
 			return nil, fiber.NewError(fiber.StatusNotFound, "Fund not found")
 		}
 		return nil, fmt.Errorf("failed to deposit: %w", err)
@@ -126,10 +128,10 @@ func (s *FundService) Withdraw(id, userID int64, req *models.FundTransactionRequ
 
 	fund, err := s.repo.Withdraw(id, userID, req.Amount)
 	if err != nil {
-		switch err.Error() {
-		case "fund not found":
+		if errors.Is(err, apperr.ErrNotFound) {
 			return nil, fiber.NewError(fiber.StatusNotFound, "Fund not found")
-		case "insufficient balance":
+		}
+		if errors.Is(err, apperr.ErrInsufficientBalance) {
 			return nil, fiber.NewError(fiber.StatusBadRequest, "Insufficient fund balance")
 		}
 		return nil, fmt.Errorf("failed to withdraw: %w", err)

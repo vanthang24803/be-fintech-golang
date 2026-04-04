@@ -25,7 +25,10 @@ func NewSavingsGoalHandler(service SavingsGoalService) *SavingsGoalHandler {
 }
 
 func (h *SavingsGoalHandler) Create(c *fiber.Ctx) error {
-	userID := c.Locals("user_id").(int64)
+	userID, err := extractUserID(c)
+	if err != nil {
+		return err
+	}
 	var req models.CreateGoalRequest
 	if err := c.BodyParser(&req); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "common.bad_request")
@@ -40,7 +43,10 @@ func (h *SavingsGoalHandler) Create(c *fiber.Ctx) error {
 }
 
 func (h *SavingsGoalHandler) List(c *fiber.Ctx) error {
-	userID := c.Locals("user_id").(int64)
+	userID, err := extractUserID(c)
+	if err != nil {
+		return err
+	}
 	res, err := h.service.List(userID)
 	if err != nil {
 		return err
@@ -50,9 +56,12 @@ func (h *SavingsGoalHandler) List(c *fiber.Ctx) error {
 }
 
 func (h *SavingsGoalHandler) GetDetail(c *fiber.Ctx) error {
-	userID := c.Locals("user_id").(int64)
-	id, _ := strconv.ParseInt(c.Params("id"), 10, 64)
-	if id == 0 {
+	userID, err := extractUserID(c)
+	if err != nil {
+		return err
+	}
+	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid ID")
 	}
 
@@ -65,7 +74,10 @@ func (h *SavingsGoalHandler) GetDetail(c *fiber.Ctx) error {
 }
 
 func (h *SavingsGoalHandler) Contribute(c *fiber.Ctx) error {
-	userID := c.Locals("user_id").(int64)
+	userID, err := extractUserID(c)
+	if err != nil {
+		return err
+	}
 	var req models.GoalContributeRequest
 	if err := c.BodyParser(&req); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "common.bad_request")
@@ -80,7 +92,10 @@ func (h *SavingsGoalHandler) Contribute(c *fiber.Ctx) error {
 }
 
 func (h *SavingsGoalHandler) Withdraw(c *fiber.Ctx) error {
-	userID := c.Locals("user_id").(int64)
+	userID, err := extractUserID(c)
+	if err != nil {
+		return err
+	}
 	var req models.GoalWithdrawRequest
 	if err := c.BodyParser(&req); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "common.bad_request")

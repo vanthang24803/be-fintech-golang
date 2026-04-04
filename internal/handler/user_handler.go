@@ -7,7 +7,6 @@ import (
 	"github.com/maynguyen24/sever/pkg/validator"
 )
 
-// UserService interface is defined where it is used (handler layer)
 type UserService interface {
 	RegisterUser(req *models.RegisterRequest) (*models.User, error)
 	GetProfile(userID int64) (*models.ProfileResponse, error)
@@ -35,7 +34,7 @@ func (h *UserHandler) Register(c *fiber.Ctx) error {
 
 	user, err := h.service.RegisterUser(&req)
 	if err != nil {
-		return err // The global ErrorHandler interceptor will catch this
+		return err
 	}
 
 	res := models.RegisterResponse{User: user}
@@ -43,29 +42,19 @@ func (h *UserHandler) Register(c *fiber.Ctx) error {
 }
 
 func (h *UserHandler) GetProfile(c *fiber.Ctx) error {
-	userIDVal := c.Locals("user_id")
-	if userIDVal == nil {
-		return fiber.NewError(fiber.StatusUnauthorized, "Unauthorized")
-	}
-
-	userID, ok := userIDVal.(int64)
-	if !ok {
-		if uidFloat, ok := userIDVal.(float64); ok {
-			userID = int64(uidFloat)
-		} else {
-			return fiber.NewError(fiber.StatusInternalServerError, "Invalid user ID type in context")
-		}
+	userID, err := extractUserID(c)
+	if err != nil {
+		return err
 	}
 
 	res, err := h.service.GetProfile(userID)
 	if err != nil {
-		return err // Global ErrorHandler will tackle this
+		return err
 	}
 
 	return response.Success(c, 2000, "Profile fetched successfully", res)
 }
 
-// POST /api/v1/profile/update
 func (h *UserHandler) UpdateProfile(c *fiber.Ctx) error {
 	userID, err := extractUserID(c)
 	if err != nil {

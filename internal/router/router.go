@@ -11,6 +11,7 @@ import (
 	"github.com/maynguyen24/sever/pkg/i18n"
 	"github.com/maynguyen24/sever/pkg/push"
 	"github.com/maynguyen24/sever/pkg/queue"
+	"github.com/redis/go-redis/v9"
 )
 
 // SetupRoutes wires up all dependencies and mounts the API endpoints
@@ -60,6 +61,12 @@ func SetupRoutes(app *fiber.App, cfg *configs.Config) {
 	reportService := service.NewReportService(reportRepo)
 	goalService := service.NewSavingsGoalService(goalRepo, fundRepo, notificationService, queueClient)
 
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:     cfg.RedisAddr,
+		Password: cfg.RedisPassword,
+	})
+	fidoService, _ := service.NewFIDOService(deviceRepo, redisClient, cfg)
+
 	// 3. Handlers
 	userHandler := handler.NewUserHandler(userService)
 	authHandler := handler.NewAuthHandler(authService)
@@ -72,6 +79,7 @@ func SetupRoutes(app *fiber.App, cfg *configs.Config) {
 	budgetHandler := handler.NewBudgetHandler(budgetService)
 	reportHandler := handler.NewReportHandler(reportService)
 	goalHandler := handler.NewSavingsGoalHandler(goalService)
+	fidoHandler := handler.NewFIDOHandler(fidoService)
 
 	// 4. API Routes Group
 	api := app.Group("/api/v1")
@@ -86,6 +94,10 @@ func SetupRoutes(app *fiber.App, cfg *configs.Config) {
 	// Google OAuth
 	auth.Post("/google/url", authHandler.GetGoogleAuthURL)
 	auth.Post("/google/callback", authHandler.GoogleCallback)
+
+	// FIDO2 Biometric Step-up Auth (public)
+	auth.Post("/biometric/begin", fidoHandler.BeginAuthentication)
+	auth.Post("/biometric/finish", fidoHandler.FinishAuthentication)
 
 	// Protected Routes (require valid JWT)
 	protected := api.Group("/", middleware.AuthRequired(cfg))
@@ -140,6 +152,8 @@ func SetupRoutes(app *fiber.App, cfg *configs.Config) {
 	devices.Post("/register", deviceHandler.Register)
 	devices.Post("/list", deviceHandler.List)
 	devices.Post("/delete/:id", middleware.FIDOMiddleware(), deviceHandler.Delete)
+	devices.Post("/biometric/enroll/:id/begin", fidoHandler.BeginEnrollment)
+	devices.Post("/biometric/enroll/:id/finish", fidoHandler.FinishEnrollment)
 
 	// Budget — all POST
 	budgets := protected.Group("/budgets")

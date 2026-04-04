@@ -26,7 +26,7 @@ func NewCategoryService(repo CategoryRepository) *CategoryService {
 }
 
 func (s *CategoryService) Create(userID int64, req *models.CreateCategoryRequest) (*models.Category, error) {
-	if req.Type != "income" && req.Type != "expense" {
+	if req.Type != models.TransactionTypeIncome && req.Type != models.TransactionTypeExpense {
 		return nil, fiber.NewError(fiber.StatusBadRequest, "Type must be 'income' or 'expense'")
 	}
 
@@ -63,7 +63,7 @@ func (s *CategoryService) GetByID(id, userID int64) (*models.Category, error) {
 }
 
 func (s *CategoryService) Update(id, userID int64, req *models.UpdateCategoryRequest) (*models.Category, error) {
-	if req.Type != "income" && req.Type != "expense" {
+	if req.Type != models.TransactionTypeIncome && req.Type != models.TransactionTypeExpense {
 		return nil, fiber.NewError(fiber.StatusBadRequest, "Type must be 'income' or 'expense'")
 	}
 

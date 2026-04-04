@@ -52,3 +52,18 @@ func GenerateTokenPair(userID int64, fidoVerified bool, cfg *configs.Config) (st
 
 	return accessTokenString, refreshTokenString, nil
 }
+
+// GenerateAccessTokenFIDO creates a short-lived access token with FIDOVerified=true.
+// Used after a successful biometric assertion to enable step-up protected endpoints.
+func GenerateAccessTokenFIDO(userID int64, cfg *configs.Config) (string, error) {
+	claims := TokenClaims{
+		UserID:       userID,
+		FIDOVerified: true,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(15 * time.Minute)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(cfg.JWTSecret))
+}

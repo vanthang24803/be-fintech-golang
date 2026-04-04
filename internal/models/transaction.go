@@ -2,6 +2,11 @@ package models
 
 import "time"
 
+const (
+	TransactionTypeIncome  = "income"
+	TransactionTypeExpense = "expense"
+)
+
 // Transaction represents a financial transaction (income or expense)
 type Transaction struct {
 	ID              int64     `db:"id" json:"id,string"`

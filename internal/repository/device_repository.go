@@ -6,6 +6,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/maynguyen24/sever/internal/models"
+	"github.com/maynguyen24/sever/pkg/apperr"
 	"github.com/maynguyen24/sever/pkg/snowflake"
 )
 
@@ -93,7 +94,7 @@ func (r *DeviceRepository) Delete(id, userID int64) error {
 	}
 	rows, _ := result.RowsAffected()
 	if rows == 0 {
-		return errors.New("device not found")
+		return apperr.ErrNotFound
 	}
 	return nil
 }
@@ -101,5 +102,40 @@ func (r *DeviceRepository) Delete(id, userID int64) error {
 // UpdateLastUsed updates the last_used_at timestamp for a device
 func (r *DeviceRepository) UpdateLastUsed(id int64) error {
 	_, err := r.db.Exec(`UPDATE devices SET last_used_at = NOW() WHERE id = $1`, id)
+	return err
+}
+
+// GetByCredentialID fetches the device that owns a given FIDO2 credential ID
+func (r *DeviceRepository) GetByCredentialID(credentialID string) (*models.Device, error) {
+	var device models.Device
+	query := `SELECT id, user_id, device_fingerprint, device_name, platform, push_token,
+		fido_credential_id, fido_public_key, fido_sign_count, fido_aaguid, is_trusted, is_active, last_used_at, created_at, updated_at
+		FROM devices WHERE fido_credential_id = $1 LIMIT 1`
+	err := r.db.Get(&device, query, credentialID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &device, nil
+}
+
+// UpdateFIDOCredential stores a newly enrolled FIDO2 credential on a device
+func (r *DeviceRepository) UpdateFIDOCredential(deviceID int64, credentialID, publicKey, aaguid string, signCount int64) error {
+	_, err := r.db.Exec(
+		`UPDATE devices SET fido_credential_id = $1, fido_public_key = $2, fido_aaguid = $3, fido_sign_count = $4, updated_at = NOW()
+		 WHERE id = $5`,
+		credentialID, publicKey, aaguid, signCount, deviceID,
+	)
+	return err
+}
+
+// UpdateSignCount updates the FIDO2 authenticator sign count after a successful assertion
+func (r *DeviceRepository) UpdateSignCount(deviceID int64, signCount int64) error {
+	_, err := r.db.Exec(
+		`UPDATE devices SET fido_sign_count = $1, updated_at = NOW() WHERE id = $2`,
+		signCount, deviceID,
+	)
 	return err
 }

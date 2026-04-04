@@ -1,0 +1,2127 @@
+openapi: 3.0.3
+info:
+  title: Expense Manager API
+  version: 1.0.0
+  description: |
+    A comprehensive personal finance management API.
+
+    ## Authentication
+    Most endpoints require a Bearer JWT access token obtained from `/auth/login` or `/auth/refresh`.
+    Sensitive operations (profile update, withdrawals, deletions) additionally require **FIDO2 step-up authentication**:
+    call `/auth/biometric/begin` → `/auth/biometric/finish` to receive a FIDO-verified access token.
+
+    ## Conventions
+    - All endpoints use `POST` method.
+    - Action intent is expressed in the URL path (e.g. `/funds/deposit/:id`).
+    - All responses follow the unified envelope: `{ "code", "message", "data" }`.
+    - IDs are 64-bit integers serialised as strings in JSON.
+
+servers:
+  - url: /api/v1
+    description: Current API version
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: Auth
+    description: Registration, login, token refresh, OAuth
+  - name: Profile
+    description: User profile read and update
+  - name: Sources
+    description: Payment source (bank / e-wallet) management
+  - name: Categories
+    description: Transaction category management
+  - name: Transactions
+    description: Income and expense recording
+  - name: Funds
+    description: Savings pocket management
+  - name: Budgets
+    description: Spending limit management
+  - name: Goals
+    description: Savings goal management
+  - name: Reports
+    description: Analytics and spending summaries
+  - name: Notifications
+    description: In-app notification management
+  - name: Devices
+    description: Registered device and FIDO2 biometric management
+  - name: FIDO2
+    description: Biometric step-up authentication
+
+# ---------------------------------------------------------------------------
+# Reusable components
+# ---------------------------------------------------------------------------
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    ResourceID:
+      name: id
+      in: path
+      required: true
+      description: Resource ID (int64 as string)
+      schema:
+        type: string
+        example: "1234567890001"
+
+  responses:
+    BadRequest:
+      description: Invalid request body or parameters
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Missing or invalid Bearer token
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    FIDORequired:
+      description: FIDO2 step-up authentication required (code 4031)
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: "#/components/schemas/ErrorResponse"
+              - type: object
+                properties:
+                  code:
+                    example: 4031
+                  message:
+                    example: Biometric authentication required to continue
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    # --- Generic response envelope ---
+    SuccessResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 2000
+        message:
+          type: string
+          example: Success
+        data:
+          description: Payload; null when there is nothing to return.
+
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 4010
+        message:
+          type: string
+          example: Unauthorized access
+        error:
+          type: string
+          example: Missing or invalid token
+
+    # --- Auth ---
+    RegisterRequest:
+      type: object
+      required: [username, email, password]
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+          example: johndoe
+        email:
+          type: string
+          format: email
+          example: john@example.com
+        password:
+          type: string
+          minLength: 8
+          example: "s3cur3P@ss"
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          example: john@example.com
+        password:
+          type: string
+          example: "s3cur3P@ss"
+
+    TokenPair:
+      type: object
+      properties:
+        access_token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        refresh_token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token:
+          type: string
+
+    LogoutRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token:
+          type: string
+
+    GoogleCallbackRequest:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+          description: OAuth2 authorisation code from Google redirect
+
+    # --- Profile ---
+    Profile:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "7891234567890"
+        user_id:
+          type: string
+          example: "1234567890123"
+        full_name:
+          type: string
+          example: John Doe
+        avatar_url:
+          type: string
+          nullable: true
+          example: https://cdn.example.com/avatars/johndoe.jpg
+        phone:
+          type: string
+          nullable: true
+          example: "+84901234567"
+        date_of_birth:
+          type: string
+          format: date
+          nullable: true
+          example: "1995-06-15"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    UpdateProfileRequest:
+      type: object
+      properties:
+        full_name:
+          type: string
+          example: John Doe
+        avatar_url:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        date_of_birth:
+          type: string
+          format: date
+          nullable: true
+
+    # --- Source Payment ---
+    SourcePayment:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "1234567890001"
+        user_id:
+          type: string
+          example: "1234567890123"
+        name:
+          type: string
+          example: Vietcombank
+        type:
+          type: string
+          example: bank_account
+        balance:
+          type: number
+          format: double
+          example: 5000000
+        currency:
+          type: string
+          example: VND
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateSourcePaymentRequest:
+      type: object
+      required: [name, type, currency]
+      properties:
+        name:
+          type: string
+          example: Vietcombank
+        type:
+          type: string
+          example: bank_account
+        balance:
+          type: number
+          format: double
+          example: 0
+        currency:
+          type: string
+          example: VND
+
+    UpdateSourcePaymentRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+        currency:
+          type: string
+
+    # --- Category ---
+    Category:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "1234567890002"
+        user_id:
+          type: string
+        name:
+          type: string
+          example: Food & Drink
+        type:
+          type: string
+          enum: [income, expense]
+          example: expense
+        icon:
+          type: string
+          nullable: true
+          example: "🍔"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateCategoryRequest:
+      type: object
+      required: [name, type]
+      properties:
+        name:
+          type: string
+          example: Food & Drink
+        type:
+          type: string
+          enum: [income, expense]
+        icon:
+          type: string
+          nullable: true
+
+    UpdateCategoryRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [income, expense]
+        icon:
+          type: string
+          nullable: true
+
+    # --- Transaction ---
+    Transaction:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "1234567890003"
+        user_id:
+          type: string
+        source_payment_id:
+          type: string
+          example: "1234567890001"
+        category_id:
+          type: string
+          example: "1234567890002"
+        amount:
+          type: number
+          format: double
+          example: 120000
+        type:
+          type: string
+          enum: [income, expense]
+        description:
+          type: string
+          nullable: true
+          example: Lunch with team
+        transaction_date:
+          type: string
+          format: date-time
+        source_name:
+          type: string
+          example: Vietcombank
+        category_name:
+          type: string
+          example: Food & Drink
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateTransactionRequest:
+      type: object
+      required: [source_payment_id, category_id, amount, type]
+      properties:
+        source_payment_id:
+          type: string
+        category_id:
+          type: string
+        amount:
+          type: number
+          format: double
+          minimum: 0.01
+          example: 120000
+        type:
+          type: string
+          enum: [income, expense]
+        description:
+          type: string
+          nullable: true
+        transaction_date:
+          type: string
+          format: date-time
+
+    UpdateTransactionRequest:
+      type: object
+      properties:
+        source_payment_id:
+          type: string
+        category_id:
+          type: string
+        amount:
+          type: number
+          format: double
+        type:
+          type: string
+          enum: [income, expense]
+        description:
+          type: string
+          nullable: true
+        transaction_date:
+          type: string
+          format: date-time
+
+    ListTransactionsRequest:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [income, expense]
+          description: Filter by transaction type
+        category_id:
+          type: string
+          description: Filter by category ID
+        source_id:
+          type: string
+          description: Filter by source payment ID
+
+    # --- Fund ---
+    Fund:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "1234567890004"
+        user_id:
+          type: string
+        name:
+          type: string
+          example: Emergency Fund
+        description:
+          type: string
+          nullable: true
+        target_amount:
+          type: number
+          format: double
+          example: 10000000
+        balance:
+          type: number
+          format: double
+          example: 3500000
+        currency:
+          type: string
+          example: VND
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateFundRequest:
+      type: object
+      required: [name, currency]
+      properties:
+        name:
+          type: string
+          example: Emergency Fund
+        description:
+          type: string
+          nullable: true
+        target_amount:
+          type: number
+          format: double
+          example: 10000000
+        balance:
+          type: number
+          format: double
+          example: 0
+        currency:
+          type: string
+          example: VND
+
+    UpdateFundRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        target_amount:
+          type: number
+          format: double
+        currency:
+          type: string
+
+    FundTransactionRequest:
+      type: object
+      required: [amount]
+      properties:
+        amount:
+          type: number
+          format: double
+          minimum: 0.01
+          example: 500000
+
+    # --- Budget ---
+    Budget:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "1234567890005"
+        user_id:
+          type: string
+        category_id:
+          type: string
+          nullable: true
+        amount:
+          type: number
+          format: double
+          example: 3000000
+        period:
+          type: string
+          enum: [monthly, weekly, custom]
+          example: monthly
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+          nullable: true
+        is_active:
+          type: boolean
+        spent:
+          type: number
+          format: double
+          description: Amount spent so far in this period
+        progress_percent:
+          type: number
+          format: double
+          description: Spending as a percentage of the budget limit
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateBudgetRequest:
+      type: object
+      required: [amount, period, start_date]
+      properties:
+        category_id:
+          type: string
+          nullable: true
+          description: null for a total (all-category) budget
+        amount:
+          type: number
+          format: double
+          example: 3000000
+        period:
+          type: string
+          enum: [monthly, weekly, custom]
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+          nullable: true
+
+    UpdateBudgetRequest:
+      type: object
+      properties:
+        amount:
+          type: number
+          format: double
+        is_active:
+          type: boolean
+
+    # --- Savings Goal ---
+    SavingsGoal:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "1234567890006"
+        user_id:
+          type: string
+        name:
+          type: string
+          example: New Laptop
+        target_amount:
+          type: number
+          format: double
+          example: 20000000
+        saved_amount:
+          type: number
+          format: double
+          example: 8000000
+        progress_percent:
+          type: number
+          format: double
+          example: 40
+        deadline:
+          type: string
+          format: date
+          nullable: true
+        is_reached:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    CreateGoalRequest:
+      type: object
+      required: [name, target_amount]
+      properties:
+        name:
+          type: string
+          example: New Laptop
+        target_amount:
+          type: number
+          format: double
+          example: 20000000
+        deadline:
+          type: string
+          format: date
+          nullable: true
+
+    ContributeGoalRequest:
+      type: object
+      required: [goal_id, fund_id, amount]
+      properties:
+        goal_id:
+          type: string
+        fund_id:
+          type: string
+          description: Fund to withdraw from for this contribution
+        amount:
+          type: number
+          format: double
+          minimum: 0.01
+
+    WithdrawGoalRequest:
+      type: object
+      required: [goal_id, fund_id, amount]
+      properties:
+        goal_id:
+          type: string
+        fund_id:
+          type: string
+          description: Fund to return the money to
+        amount:
+          type: number
+          format: double
+          minimum: 0.01
+
+    # --- Reports ---
+    CategorySummaryRequest:
+      type: object
+      properties:
+        start_date:
+          type: string
+          format: date
+          example: "2026-01-01"
+        end_date:
+          type: string
+          format: date
+          example: "2026-03-31"
+
+    CategorySummaryItem:
+      type: object
+      properties:
+        category_id:
+          type: string
+        category_name:
+          type: string
+        icon:
+          type: string
+          nullable: true
+        total:
+          type: number
+          format: double
+        percentage:
+          type: number
+          format: double
+
+    MonthlyTrendRequest:
+      type: object
+      properties:
+        months:
+          type: integer
+          default: 6
+          description: Number of past months to include
+
+    MonthlyTrendItem:
+      type: object
+      properties:
+        month:
+          type: string
+          example: "2026-03"
+        income:
+          type: number
+          format: double
+        expense:
+          type: number
+          format: double
+        net:
+          type: number
+          format: double
+
+    # --- Device ---
+    Device:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "1234567890007"
+        user_id:
+          type: string
+        device_fingerprint:
+          type: string
+        device_name:
+          type: string
+          nullable: true
+          example: "iPhone 16 Pro"
+        platform:
+          type: string
+          enum: [ios, android, web]
+        push_token:
+          type: string
+          nullable: true
+        fido_aaguid:
+          type: string
+          nullable: true
+          description: AAGUID of the enrolled authenticator (present after biometric enrollment)
+        is_trusted:
+          type: boolean
+        is_active:
+          type: boolean
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    RegisterDeviceRequest:
+      type: object
+      required: [device_fingerprint, platform]
+      properties:
+        device_fingerprint:
+          type: string
+          minLength: 16
+          maxLength: 512
+        device_name:
+          type: string
+          nullable: true
+          example: "iPhone 16 Pro"
+        platform:
+          type: string
+          enum: [ios, android, web]
+        push_token:
+          type: string
+          nullable: true
+
+    # --- Notification ---
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "1234567890008"
+        user_id:
+          type: string
+        source:
+          type: string
+          enum: [transaction, fund, auth, system, budget, goal]
+        source_id:
+          type: string
+          nullable: true
+        type:
+          type: string
+          example: budget_warning
+        title:
+          type: string
+          example: Budget Warning
+        body:
+          type: string
+          example: You have reached 80% of your Food & Drink limit.
+        metadata:
+          type: object
+          nullable: true
+          additionalProperties: true
+        is_read:
+          type: boolean
+        read_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    ListNotificationsRequest:
+      type: object
+      properties:
+        source:
+          type: string
+          enum: [transaction, fund, auth, system, budget, goal]
+          description: Filter by notification source
+        is_read:
+          type: boolean
+          description: Filter by read status
+
+    MarkReadRequest:
+      type: object
+      required: [ids]
+      properties:
+        ids:
+          type: array
+          items:
+            type: string
+          example: ["1234567890008", "1234567890009"]
+
+    # --- FIDO2 ---
+    BeginAuthRequest:
+      type: object
+      required: [credential_id]
+      properties:
+        credential_id:
+          type: string
+          description: Base64url-encoded credential ID stored on the device after enrollment
+          example: "AAAAAAAAAAAAAAAAAAAAAA"
+
+    FIDOAccessToken:
+      type: object
+      properties:
+        access_token:
+          type: string
+          description: 15-minute access token with fido_verified=true; use as Bearer token for step-up protected endpoints.
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
+paths:
+
+  # =========================================================================
+  # Auth
+  # =========================================================================
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: User registered
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/TokenPair"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          description: Email or username already taken
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Log in and receive a JWT pair
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/TokenPair"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh the access token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "200":
+          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/TokenPair"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Revoke the refresh token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LogoutRequest"
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /auth/google/url:
+    post:
+      tags: [Auth]
+      summary: Get Google OAuth2 redirect URL
+      security: []
+      responses:
+        "200":
+          description: Google auth URL
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          url:
+                            type: string
+                            example: "https://accounts.google.com/o/oauth2/auth?..."
+
+  /auth/google/callback:
+    post:
+      tags: [Auth]
+      summary: Handle Google OAuth2 callback
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GoogleCallbackRequest"
+      responses:
+        "200":
+          description: Authenticated via Google
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/TokenPair"
+
+  # =========================================================================
+  # FIDO2 Step-up Authentication
+  # =========================================================================
+  /auth/biometric/begin:
+    post:
+      tags: [FIDO2]
+      summary: Begin FIDO2 assertion (step-up auth)
+      description: |
+        Returns a `PublicKeyCredentialRequestOptions` challenge.
+        Pass the `credential_id` of the enrolled FIDO2 credential for this device.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BeginAuthRequest"
+      responses:
+        "200":
+          description: Assertion challenge issued
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        description: WebAuthn PublicKeyCredentialRequestOptions (pass directly to navigator.credentials.get())
+        "404":
+          description: Credential not found
+
+  /auth/biometric/finish:
+    post:
+      tags: [FIDO2]
+      summary: Finish FIDO2 assertion and receive FIDO-verified token
+      description: |
+        Submit the raw WebAuthn assertion response from `navigator.credentials.get()`.
+        Returns a short-lived (15 min) access token with `fido_verified=true`.
+        Use this token as the Bearer token when calling step-up protected endpoints.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Raw `PublicKeyCredential` JSON from navigator.credentials.get()
+              properties:
+                id:
+                  type: string
+                  description: Base64url credential ID
+                rawId:
+                  type: string
+                response:
+                  type: object
+                  properties:
+                    authenticatorData:
+                      type: string
+                    clientDataJSON:
+                      type: string
+                    signature:
+                      type: string
+                    userHandle:
+                      type: string
+                      nullable: true
+                type:
+                  type: string
+                  example: public-key
+      responses:
+        "200":
+          description: FIDO2 verified – FIDO access token issued
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/FIDOAccessToken"
+        "400":
+          description: Verification failed or challenge expired
+        "401":
+          description: Invalid signature or replay detected
+
+  # =========================================================================
+  # Profile
+  # =========================================================================
+  /profile/me:
+    post:
+      tags: [Profile]
+      summary: Get current user profile
+      responses:
+        "200":
+          description: Profile data
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Profile"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /profile/update:
+    post:
+      tags: [Profile]
+      summary: Update user profile
+      description: "**Requires FIDO2 step-up token** (fido_verified=true in Bearer JWT)."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProfileRequest"
+      responses:
+        "200":
+          description: Profile updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Profile"
+        "403":
+          $ref: "#/components/responses/FIDORequired"
+
+  # =========================================================================
+  # Source Payments
+  # =========================================================================
+  /sources/create:
+    post:
+      tags: [Sources]
+      summary: Create a payment source
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSourcePaymentRequest"
+      responses:
+        "201":
+          description: Source created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SourcePayment"
+
+  /sources/list:
+    post:
+      tags: [Sources]
+      summary: List all payment sources
+      responses:
+        "200":
+          description: List of sources
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/SourcePayment"
+
+  /sources/detail/{id}:
+    post:
+      tags: [Sources]
+      summary: Get a payment source by ID
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Source detail
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SourcePayment"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /sources/update/{id}:
+    post:
+      tags: [Sources]
+      summary: Update a payment source
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSourcePaymentRequest"
+      responses:
+        "200":
+          description: Source updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SourcePayment"
+
+  /sources/delete/{id}:
+    post:
+      tags: [Sources]
+      summary: Delete a payment source
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Source deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # =========================================================================
+  # Categories
+  # =========================================================================
+  /categories/create:
+    post:
+      tags: [Categories]
+      summary: Create a category
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCategoryRequest"
+      responses:
+        "201":
+          description: Category created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Category"
+
+  /categories/list:
+    post:
+      tags: [Categories]
+      summary: List all categories
+      responses:
+        "200":
+          description: List of categories
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Category"
+
+  /categories/detail/{id}:
+    post:
+      tags: [Categories]
+      summary: Get a category by ID
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Category detail
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Category"
+
+  /categories/update/{id}:
+    post:
+      tags: [Categories]
+      summary: Update a category
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCategoryRequest"
+      responses:
+        "200":
+          description: Category updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Category"
+
+  /categories/delete/{id}:
+    post:
+      tags: [Categories]
+      summary: Delete a category
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Category deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # =========================================================================
+  # Transactions
+  # =========================================================================
+  /transactions/create:
+    post:
+      tags: [Transactions]
+      summary: Record a transaction
+      description: |
+        Creating an **expense** transaction automatically triggers an async budget-check
+        and a notification if any budget limit is approaching or exceeded.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTransactionRequest"
+      responses:
+        "201":
+          description: Transaction recorded
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Transaction"
+
+  /transactions/list:
+    post:
+      tags: [Transactions]
+      summary: List transactions with optional filters
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListTransactionsRequest"
+      responses:
+        "200":
+          description: List of transactions
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Transaction"
+
+  /transactions/detail/{id}:
+    post:
+      tags: [Transactions]
+      summary: Get a transaction by ID
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Transaction detail
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Transaction"
+
+  /transactions/update/{id}:
+    post:
+      tags: [Transactions]
+      summary: Update a transaction
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTransactionRequest"
+      responses:
+        "200":
+          description: Transaction updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Transaction"
+
+  /transactions/delete/{id}:
+    post:
+      tags: [Transactions]
+      summary: Delete a transaction
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Transaction deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # =========================================================================
+  # Funds
+  # =========================================================================
+  /funds/create:
+    post:
+      tags: [Funds]
+      summary: Create a savings pocket
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateFundRequest"
+      responses:
+        "201":
+          description: Fund created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Fund"
+
+  /funds/list:
+    post:
+      tags: [Funds]
+      summary: List all savings pockets
+      responses:
+        "200":
+          description: List of funds
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Fund"
+
+  /funds/detail/{id}:
+    post:
+      tags: [Funds]
+      summary: Get a fund by ID
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Fund detail
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Fund"
+
+  /funds/update/{id}:
+    post:
+      tags: [Funds]
+      summary: Update fund metadata
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateFundRequest"
+      responses:
+        "200":
+          description: Fund updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Fund"
+
+  /funds/delete/{id}:
+    post:
+      tags: [Funds]
+      summary: Delete a fund
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Fund deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /funds/deposit/{id}:
+    post:
+      tags: [Funds]
+      summary: Deposit money into a fund
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FundTransactionRequest"
+      responses:
+        "200":
+          description: Deposit successful
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Fund"
+
+  /funds/withdraw/{id}:
+    post:
+      tags: [Funds]
+      summary: Withdraw money from a fund
+      description: "**Requires FIDO2 step-up token.**"
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FundTransactionRequest"
+      responses:
+        "200":
+          description: Withdrawal successful
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Fund"
+        "400":
+          description: Insufficient balance
+        "403":
+          $ref: "#/components/responses/FIDORequired"
+
+  # =========================================================================
+  # Budgets
+  # =========================================================================
+  /budgets/create:
+    post:
+      tags: [Budgets]
+      summary: Create a spending budget
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBudgetRequest"
+      responses:
+        "201":
+          description: Budget created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Budget"
+
+  /budgets/list:
+    post:
+      tags: [Budgets]
+      summary: List budgets with spending progress
+      responses:
+        "200":
+          description: List of budgets
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Budget"
+
+  /budgets/detail/{id}:
+    post:
+      tags: [Budgets]
+      summary: Get budget details including live spending
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Budget detail
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Budget"
+
+  /budgets/update/{id}:
+    post:
+      tags: [Budgets]
+      summary: Update budget amount or active status
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBudgetRequest"
+      responses:
+        "200":
+          description: Budget updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Budget"
+
+  /budgets/delete/{id}:
+    post:
+      tags: [Budgets]
+      summary: Delete a budget
+      description: "**Requires FIDO2 step-up token.**"
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Budget deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "403":
+          $ref: "#/components/responses/FIDORequired"
+
+  # =========================================================================
+  # Savings Goals
+  # =========================================================================
+  /goals/create:
+    post:
+      tags: [Goals]
+      summary: Create a savings goal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGoalRequest"
+      responses:
+        "201":
+          description: Goal created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SavingsGoal"
+
+  /goals/list:
+    post:
+      tags: [Goals]
+      summary: List all savings goals
+      responses:
+        "200":
+          description: List of goals
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/SavingsGoal"
+
+  /goals/detail/{id}:
+    post:
+      tags: [Goals]
+      summary: Get a savings goal by ID
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Goal detail
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SavingsGoal"
+
+  /goals/contribute:
+    post:
+      tags: [Goals]
+      summary: Contribute money from a fund to a savings goal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContributeGoalRequest"
+      responses:
+        "200":
+          description: Contribution successful
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SavingsGoal"
+
+  /goals/withdraw:
+    post:
+      tags: [Goals]
+      summary: Withdraw money from a savings goal back to a fund
+      description: "**Requires FIDO2 step-up token.**"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WithdrawGoalRequest"
+      responses:
+        "200":
+          description: Withdrawal successful
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SavingsGoal"
+        "403":
+          $ref: "#/components/responses/FIDORequired"
+
+  # =========================================================================
+  # Reports
+  # =========================================================================
+  /reports/category-summary:
+    post:
+      tags: [Reports]
+      summary: Spending breakdown by category
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategorySummaryRequest"
+      responses:
+        "200":
+          description: Category summary
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/CategorySummaryItem"
+
+  /reports/monthly-trend:
+    post:
+      tags: [Reports]
+      summary: Monthly income vs. expense trend
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MonthlyTrendRequest"
+      responses:
+        "200":
+          description: Monthly trend data
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/MonthlyTrendItem"
+
+  # =========================================================================
+  # Notifications
+  # =========================================================================
+  /notifications/list:
+    post:
+      tags: [Notifications]
+      summary: List notifications with optional filters
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListNotificationsRequest"
+      responses:
+        "200":
+          description: List of notifications
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Notification"
+
+  /notifications/unread-count:
+    post:
+      tags: [Notifications]
+      summary: Get count of unread notifications
+      responses:
+        "200":
+          description: Unread count
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          count:
+                            type: integer
+                            example: 3
+
+  /notifications/mark-read:
+    post:
+      tags: [Notifications]
+      summary: Bulk mark notifications as read
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MarkReadRequest"
+      responses:
+        "200":
+          description: Marked as read
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /notifications/delete/{id}:
+    post:
+      tags: [Notifications]
+      summary: Delete a notification
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Notification deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # =========================================================================
+  # Devices
+  # =========================================================================
+  /devices/register:
+    post:
+      tags: [Devices]
+      summary: Register a new device
+      description: Called on first launch or after login on a new device. Enforces one-device-one-account policy.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterDeviceRequest"
+      responses:
+        "201":
+          description: Device registered
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Device"
+
+  /devices/list:
+    post:
+      tags: [Devices]
+      summary: List registered devices
+      responses:
+        "200":
+          description: List of devices
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Device"
+
+  /devices/delete/{id}:
+    post:
+      tags: [Devices]
+      summary: Remove / untrust a device
+      description: "**Requires FIDO2 step-up token.**"
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Device removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "403":
+          $ref: "#/components/responses/FIDORequired"
+
+  /devices/biometric/enroll/{id}/begin:
+    post:
+      tags: [Devices]
+      summary: Begin FIDO2 biometric enrollment for a device
+      description: |
+        Returns a `PublicKeyCredentialCreationOptions` challenge.
+        Pass the result directly to `navigator.credentials.create()`.
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Enrollment challenge issued
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        description: WebAuthn PublicKeyCredentialCreationOptions
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /devices/biometric/enroll/{id}/finish:
+    post:
+      tags: [Devices]
+      summary: Finish FIDO2 biometric enrollment
+      description: |
+        Submit the raw `PublicKeyCredential` JSON from `navigator.credentials.create()`.
+        On success the device record is updated with the enrolled credential.
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Raw PublicKeyCredential JSON from navigator.credentials.create()
+              properties:
+                id:
+                  type: string
+                rawId:
+                  type: string
+                response:
+                  type: object
+                  properties:
+                    attestationObject:
+                      type: string
+                    clientDataJSON:
+                      type: string
+                type:
+                  type: string
+                  example: public-key
+      responses:
+        "201":
+          description: Biometric enrolled
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Device"
+        "400":
+          description: Challenge expired or verification failed

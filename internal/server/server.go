@@ -3,6 +3,7 @@ package server
 import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/maynguyen24/sever/configs"
+	"github.com/maynguyen24/sever/internal/docs"
 	"github.com/maynguyen24/sever/internal/middleware"
 	"github.com/maynguyen24/sever/internal/router"
 	"github.com/maynguyen24/sever/pkg/logger"
@@ -66,6 +67,9 @@ func NewServer(opts ...Option) *Server {
 
 	// Setup layout middlewares
 	app.Use(middleware.RequestLogger())
+
+	// Public API reference and raw OpenAPI document
+	docs.RegisterRoutes(app)
 
 	// Init custom routes
 	router.SetupRoutes(app, s.cfg)

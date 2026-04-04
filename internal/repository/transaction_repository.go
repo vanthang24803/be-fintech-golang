@@ -7,6 +7,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/maynguyen24/sever/internal/models"
+	"github.com/maynguyen24/sever/pkg/apperr"
 	"github.com/maynguyen24/sever/pkg/snowflake"
 )
 
@@ -25,7 +26,7 @@ func (r *TransactionRepository) Create(tx *models.Transaction) error {
 
 	// Determine balance delta: income → +amount, expense → -amount
 	var balanceDelta float64
-	if tx.Type == "income" {
+	if tx.Type == models.TransactionTypeIncome {
 		balanceDelta = tx.Amount
 	} else {
 		balanceDelta = -tx.Amount
@@ -162,8 +163,8 @@ func (r *TransactionRepository) Update(old *models.Transaction, updated *models.
 
 	// Calculate the net balance adjustment:
 	// Reverse old effect, then apply new effect
-	oldDelta := map[string]float64{"income": old.Amount, "expense": -old.Amount}[old.Type]
-	newDelta := map[string]float64{"income": updated.Amount, "expense": -updated.Amount}[updated.Type]
+	oldDelta := map[string]float64{models.TransactionTypeIncome: old.Amount, models.TransactionTypeExpense: -old.Amount}[old.Type]
+	newDelta := map[string]float64{models.TransactionTypeIncome: updated.Amount, models.TransactionTypeExpense: -updated.Amount}[updated.Type]
 
 	// 1. Reverse old balance on old source
 	_, err = dbTx.Exec(
@@ -210,11 +211,11 @@ func (r *TransactionRepository) Delete(id, userID int64) error {
 		return err
 	}
 	if raw == nil {
-		return fmt.Errorf("transaction not found")
+		return apperr.ErrNotFound
 	}
 
 	// Reverse: income was +amount → subtract; expense was -amount → add back
-	reverseDelta := map[string]float64{"income": -raw.Amount, "expense": raw.Amount}[raw.Type]
+	reverseDelta := map[string]float64{models.TransactionTypeIncome: -raw.Amount, models.TransactionTypeExpense: raw.Amount}[raw.Type]
 
 	dbTx, err := r.db.Beginx()
 	if err != nil {

@@ -35,5 +35,15 @@
     "contribute_success": "Nạp tiền vào mục tiêu nhà thành công",
     "withdraw_success": "Rút tiền về quỹ thành công",
     "goal_reached": "Chúc mừng! Bạn đã hoàn thành mục tiêu: {{name}}"
+  },
+  "fido": {
+    "enrollment_started": "Bắt đầu đăng ký sinh trắc học",
+    "enrollment_success": "Đăng ký sinh trắc học thành công",
+    "auth_started": "Đã tạo thử thách sinh trắc học",
+    "auth_success": "Xác minh sinh trắc học thành công",
+    "credential_not_found": "Không tìm thấy thông tin xác thực",
+    "challenge_expired": "Thử thách đã hết hạn, vui lòng thử lại",
+    "invalid_signature": "Xác minh sinh trắc học thất bại",
+    "sign_count_invalid": "Phát hiện xác thực trùng lặp"
   }
 }

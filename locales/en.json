@@ -35,5 +35,15 @@
     "contribute_success": "Funded savings goal successfully",
     "withdraw_success": "Withdrawn from goal successfully",
     "goal_reached": "Congratulations! You have reached your goal: {{name}}"
+  },
+  "fido": {
+    "enrollment_started": "Biometric enrollment started",
+    "enrollment_success": "Biometric enrolled successfully",
+    "auth_started": "Biometric challenge issued",
+    "auth_success": "Biometric verified",
+    "credential_not_found": "Credential not found",
+    "challenge_expired": "Challenge expired, please try again",
+    "invalid_signature": "Biometric verification failed",
+    "sign_count_invalid": "Authenticator replay detected"
   }
 }

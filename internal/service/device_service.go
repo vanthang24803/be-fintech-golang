@@ -1,10 +1,12 @@
 package service
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/maynguyen24/sever/internal/models"
+	"github.com/maynguyen24/sever/pkg/apperr"
 )
 
 // DeviceRepository defines the DB contract for this service
@@ -28,7 +30,6 @@ func NewDeviceService(repo DeviceRepository) *DeviceService {
 // Register adds a new device for the user. 
 // Enforces one-device-one-account: a device fingerprint can only be associated with one user.
 func (s *DeviceService) Register(userID int64, req *models.RegisterDeviceRequest) (*models.Device, error) {
-	// 1. Check if device is already registered
 	existing, err := s.repo.GetByFingerprint(req.DeviceFingerprint)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check existing device: %w", err)
@@ -39,15 +40,13 @@ func (s *DeviceService) Register(userID int64, req *models.RegisterDeviceRequest
 		if existing.UserID != userID {
 			return nil, fiber.NewError(fiber.StatusConflict, "This device is already associated with another account")
 		}
-		// If belongs to the same user, update last used and return
 		if err := s.repo.UpdateLastUsed(existing.ID); err != nil {
 			return nil, fmt.Errorf("failed to update device status: %w", err)
 		}
-		existing.PushToken = req.PushToken // Update token if changed (simplified)
+		existing.PushToken = req.PushToken
 		return existing, nil
 	}
 
-	// 2. Create new device
 	device := &models.Device{
 		UserID:            userID,
 		DeviceFingerprint: req.DeviceFingerprint,
@@ -74,7 +73,7 @@ func (s *DeviceService) GetList(userID int64) ([]*models.Device, error) {
 
 func (s *DeviceService) Remove(userID int64, deviceID int64) error {
 	if err := s.repo.Delete(deviceID, userID); err != nil {
-		if err.Error() == "device not found" {
+		if errors.Is(err, apperr.ErrNotFound) {
 			return fiber.NewError(fiber.StatusNotFound, "Device not found")
 		}
 		return err

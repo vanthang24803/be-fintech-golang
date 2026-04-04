@@ -68,7 +68,6 @@ func (s *SourcePaymentService) GetByID(id, userID int64) (*models.SourcePayment,
 }
 
 func (s *SourcePaymentService) Update(id, userID int64, req *models.UpdateSourcePaymentRequest) (*models.SourcePayment, error) {
-	// Check ownership
 	source, err := s.repo.GetByID(id, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch source payment: %w", err)
@@ -90,7 +89,6 @@ func (s *SourcePaymentService) Update(id, userID int64, req *models.UpdateSource
 }
 
 func (s *SourcePaymentService) Delete(id, userID int64) error {
-	// Check ownership first
 	source, err := s.repo.GetByID(id, userID)
 	if err != nil {
 		return fmt.Errorf("failed to fetch source payment: %w", err)

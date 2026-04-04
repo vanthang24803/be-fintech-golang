@@ -7,6 +7,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/maynguyen24/sever/internal/models"
+	"github.com/maynguyen24/sever/pkg/apperr"
 	"github.com/maynguyen24/sever/pkg/snowflake"
 )
 
@@ -90,7 +91,7 @@ func (r *BudgetRepository) Delete(id, userID int64) error {
 	}
 	rows, _ := result.RowsAffected()
 	if rows == 0 {
-		return errors.New("budget not found")
+		return apperr.ErrNotFound
 	}
 	return nil
 }

@@ -1,12 +1,14 @@
 package service
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/maynguyen24/sever/internal/models"
+	"github.com/maynguyen24/sever/pkg/apperr"
 	"github.com/maynguyen24/sever/pkg/queue"
 )
 
@@ -56,7 +58,7 @@ func (s *TransactionService) Create(userID int64, req *models.CreateTransactionR
 	if req.Amount <= 0 {
 		return nil, fiber.NewError(fiber.StatusBadRequest, "Amount must be greater than 0")
 	}
-	if req.Type != "income" && req.Type != "expense" {
+	if req.Type != models.TransactionTypeIncome && req.Type != models.TransactionTypeExpense {
 		return nil, fiber.NewError(fiber.StatusBadRequest, "Type must be 'income' or 'expense'")
 	}
 
@@ -74,8 +76,7 @@ func (s *TransactionService) Create(userID int64, req *models.CreateTransactionR
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
 	}
 
-	// Internal budget check (Enqueue Task)
-	if tx.Type == "expense" && s.queue != nil {
+	if tx.Type == models.TransactionTypeExpense && s.queue != nil {
 		_ = s.queue.EnqueueCheckBudget(queue.BudgetCheckPayload{
 			UserID:     tx.UserID,
 			CategoryID: tx.CategoryID,
@@ -85,11 +86,10 @@ func (s *TransactionService) Create(userID int64, req *models.CreateTransactionR
 	return tx, nil
 }
 
-// CheckBudgets verifies thresholds and sends notifications (Called by Worker)
-func (s *TransactionService) CheckBudgets(userID int64, categoryID *int64) {
+func (s *TransactionService) CheckBudgets(userID int64, categoryID *int64) error {
 	budgets, err := s.budgetRepo.GetByUserID(userID)
 	if err != nil {
-		return
+		return err
 	}
 
 	for _, b := range budgets {
@@ -97,7 +97,6 @@ func (s *TransactionService) CheckBudgets(userID int64, categoryID *int64) {
 			continue
 		}
 
-		// Check if budget applies (category match or global budget)
 		if b.CategoryID != nil && (categoryID == nil || *b.CategoryID != *categoryID) {
 			continue
 		}
@@ -120,7 +119,6 @@ func (s *TransactionService) CheckBudgets(userID int64, categoryID *int64) {
 			continue // No notification needed
 		}
 
-		// Create notification
 		_ = s.notificationRepo.Create(&models.Notification{
 			UserID:   userID,
 			Source:   "budget",
@@ -130,6 +128,7 @@ func (s *TransactionService) CheckBudgets(userID int64, categoryID *int64) {
 			Body:     body,
 		})
 	}
+	return nil
 }
 
 func (s *TransactionService) GetAll(userID int64, query map[string]string) ([]*models.TransactionDetail, error) {
@@ -171,7 +170,7 @@ func (s *TransactionService) Update(id, userID int64, req *models.UpdateTransact
 	if req.Amount <= 0 {
 		return nil, fiber.NewError(fiber.StatusBadRequest, "Amount must be greater than 0")
 	}
-	if req.Type != "income" && req.Type != "expense" {
+	if req.Type != models.TransactionTypeIncome && req.Type != models.TransactionTypeExpense {
 		return nil, fiber.NewError(fiber.StatusBadRequest, "Type must be 'income' or 'expense'")
 	}
 
@@ -202,7 +201,7 @@ func (s *TransactionService) Update(id, userID int64, req *models.UpdateTransact
 
 func (s *TransactionService) Delete(id, userID int64) error {
 	if err := s.repo.Delete(id, userID); err != nil {
-		if err.Error() == "transaction not found" {
+		if errors.Is(err, apperr.ErrNotFound) {
 			return fiber.NewError(fiber.StatusNotFound, "Transaction not found")
 		}
 		return err

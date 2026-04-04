@@ -13,14 +13,17 @@ type Response struct {
 	Error   string `json:"error,omitempty"`
 }
 
-// Success is a helper to return a unified success response with i18n translation
-func Success(c *fiber.Ctx, code int, messageKey string, data any) error {
+func getLang(c *fiber.Ctx) string {
 	lang, _ := c.Locals("lang").(string)
 	if lang == "" {
-		lang = "en"
+		return "en"
 	}
+	return lang
+}
 
-	translatedMessage := i18n.Translate(lang, messageKey)
+// Success is a helper to return a unified success response with i18n translation
+func Success(c *fiber.Ctx, code int, messageKey string, data any) error {
+	translatedMessage := i18n.Translate(getLang(c), messageKey)
 
 	return c.Status(fiber.StatusOK).JSON(&Response{
 		Code:    code,
@@ -31,12 +34,7 @@ func Success(c *fiber.Ctx, code int, messageKey string, data any) error {
 
 // Error is a helper to return a unified error response with i18n translation
 func Error(c *fiber.Ctx, httpStatus int, code int, messageKey string, errDetail string) error {
-	lang, _ := c.Locals("lang").(string)
-	if lang == "" {
-		lang = "en"
-	}
-
-	translatedMessage := i18n.Translate(lang, messageKey)
+	translatedMessage := i18n.Translate(getLang(c), messageKey)
 
 	return c.Status(httpStatus).JSON(&Response{
 		Code:    code,

@@ -1,11 +1,13 @@
 package service
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/maynguyen24/sever/internal/models"
+	"github.com/maynguyen24/sever/pkg/apperr"
 )
 
 // BudgetRepository defines the DB contract for this service
@@ -26,7 +28,6 @@ func NewBudgetService(repo BudgetRepository) *BudgetService {
 	return &BudgetService{repo: repo}
 }
 
-// Create sets up a new budget and determines start/end dates
 func (s *BudgetService) Create(userID int64, req *models.CreateBudgetRequest) (*models.Budget, error) {
 	if req.Amount <= 0 {
 		return nil, fiber.NewError(fiber.StatusBadRequest, "Budget amount must be greater than zero")
@@ -38,7 +39,7 @@ func (s *BudgetService) Create(userID int64, req *models.CreateBudgetRequest) (*
 	switch req.Period {
 	case "monthly":
 		start = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
-		end = start.AddDate(0, 1, -1) // Corrected: last day of month
+		end = start.AddDate(0, 1, -1)
 		// Ensure end date is until the very end of the day (23:59:59)
 		end = time.Date(end.Year(), end.Month(), end.Day(), 23, 59, 59, 0, now.Location())
 	case "weekly":
@@ -141,7 +142,7 @@ func (s *BudgetService) Update(id, userID int64, req *models.UpdateBudgetRequest
 
 func (s *BudgetService) Delete(id, userID int64) error {
 	if err := s.repo.Delete(id, userID); err != nil {
-		if err.Error() == "budget not found" {
+		if errors.Is(err, apperr.ErrNotFound) {
 			return fiber.NewError(fiber.StatusNotFound, "Budget not found")
 		}
 		return err
