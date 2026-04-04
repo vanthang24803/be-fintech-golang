@@ -2,8 +2,8 @@ package router
 
 import (
 	"github.com/gofiber/fiber/v2"
+	"github.com/jmoiron/sqlx"
 	"github.com/maynguyen24/sever/configs"
-	"github.com/maynguyen24/sever/internal/database"
 	"github.com/maynguyen24/sever/internal/handler"
 	"github.com/maynguyen24/sever/internal/middleware"
 	"github.com/maynguyen24/sever/internal/repository"
@@ -15,7 +15,8 @@ import (
 )
 
 // SetupRoutes wires up all dependencies and mounts the API endpoints
-func SetupRoutes(app *fiber.App, cfg *configs.Config) {
+func SetupRoutes(app *fiber.App, cfg *configs.Config, db *sqlx.DB) {
+
 	// 0. Initialize I18n
 	_ = i18n.LoadLocales("locales")
 
@@ -23,17 +24,17 @@ func SetupRoutes(app *fiber.App, cfg *configs.Config) {
 	app.Use(middleware.I18nMiddleware())
 
 	// 2. Repositories
-	userRepo := repository.NewUserRepository(database.DB)
-	tokenRepo := repository.NewTokenRepository(database.DB)
-	sourceRepo := repository.NewSourcePaymentRepository(database.DB)
-	categoryRepo := repository.NewCategoryRepository(database.DB)
-	transactionRepo := repository.NewTransactionRepository(database.DB)
-	fundRepo := repository.NewFundRepository(database.DB)
-	notificationRepo := repository.NewNotificationRepository(database.DB)
-	deviceRepo := repository.NewDeviceRepository(database.DB)
-	budgetRepo := repository.NewBudgetRepository(database.DB)
-	reportRepo := repository.NewReportRepository(database.DB)
-	goalRepo := repository.NewSavingsGoalRepository(database.DB)
+	userRepo := repository.NewUserRepository(db)
+	tokenRepo := repository.NewTokenRepository(db)
+	sourceRepo := repository.NewSourcePaymentRepository(db)
+	categoryRepo := repository.NewCategoryRepository(db)
+	transactionRepo := repository.NewTransactionRepository(db)
+	fundRepo := repository.NewFundRepository(db)
+	notificationRepo := repository.NewNotificationRepository(db)
+	deviceRepo := repository.NewDeviceRepository(db)
+	budgetRepo := repository.NewBudgetRepository(db)
+	reportRepo := repository.NewReportRepository(db)
+	goalRepo := repository.NewSavingsGoalRepository(db)
 
 	// 2. Services
 	userService := service.NewUserService(userRepo)

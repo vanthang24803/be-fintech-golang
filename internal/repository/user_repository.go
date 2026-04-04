@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -11,7 +12,6 @@ import (
 )
 
 // UserRepository manages database operations for user entities.
-// Following Go principles: We export the struct and do not define the interface here.
 type UserRepository struct {
 	db *sqlx.DB
 }
@@ -21,10 +21,10 @@ func NewUserRepository(db *sqlx.DB) *UserRepository {
 	return &UserRepository{db: db}
 }
 
-func (r *UserRepository) GetUserByEmailOrUsername(email, username string) (*models.User, error) {
+func (r *UserRepository) GetUserByEmailOrUsername(ctx context.Context, email, username string) (*models.User, error) {
 	var user models.User
 	query := "SELECT id, username, email, password_hash, google_id, created_at, updated_at FROM users WHERE email = $1 OR username = $2 LIMIT 1"
-	err := r.db.Get(&user, query, email, username)
+	err := r.db.GetContext(ctx, &user, query, email, username)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil // Not found
@@ -34,10 +34,10 @@ func (r *UserRepository) GetUserByEmailOrUsername(email, username string) (*mode
 	return &user, nil
 }
 
-func (r *UserRepository) GetUserByEmail(email string) (*models.User, error) {
+func (r *UserRepository) GetUserByEmail(ctx context.Context, email string) (*models.User, error) {
 	var user models.User
 	query := "SELECT id, username, email, password_hash, google_id, created_at, updated_at FROM users WHERE email = $1 LIMIT 1"
-	err := r.db.Get(&user, query, email)
+	err := r.db.GetContext(ctx, &user, query, email)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
@@ -47,10 +47,10 @@ func (r *UserRepository) GetUserByEmail(email string) (*models.User, error) {
 	return &user, nil
 }
 
-func (r *UserRepository) GetUserByGoogleID(googleID string) (*models.User, error) {
+func (r *UserRepository) GetUserByGoogleID(ctx context.Context, googleID string) (*models.User, error) {
 	var user models.User
 	query := "SELECT id, username, email, password_hash, google_id, created_at, updated_at FROM users WHERE google_id = $1 LIMIT 1"
-	err := r.db.Get(&user, query, googleID)
+	err := r.db.GetContext(ctx, &user, query, googleID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
@@ -60,9 +60,9 @@ func (r *UserRepository) GetUserByGoogleID(googleID string) (*models.User, error
 	return &user, nil
 }
 
-func (r *UserRepository) CreateUser(user *models.User) error {
+func (r *UserRepository) CreateUser(ctx context.Context, user *models.User) error {
 	// Begin transaction
-	tx, err := r.db.Beginx()
+	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
@@ -74,7 +74,7 @@ func (r *UserRepository) CreateUser(user *models.User) error {
 		VALUES ($1, $2, $3, $4, $5) 
 		RETURNING created_at, updated_at
 	`
-	err = tx.QueryRowx(userQuery, user.ID, user.Username, user.Email, user.PasswordHash, user.GoogleID).Scan(&user.CreatedAt, &user.UpdatedAt)
+	err = tx.QueryRowxContext(ctx, userQuery, user.ID, user.Username, user.Email, user.PasswordHash, user.GoogleID).Scan(&user.CreatedAt, &user.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to insert user: %w", err)
 	}
@@ -84,7 +84,7 @@ func (r *UserRepository) CreateUser(user *models.User) error {
 		INSERT INTO profiles (id, user_id) 
 		VALUES ($1, $2)
 	`
-	_, err = tx.Exec(profileQuery, snowflake.GenerateID(), user.ID)
+	_, err = tx.ExecContext(ctx, profileQuery, snowflake.GenerateID(), user.ID)
 	if err != nil {
 		return fmt.Errorf("failed to insert empty profile: %w", err)
 	}
@@ -97,10 +97,10 @@ func (r *UserRepository) CreateUser(user *models.User) error {
 	return nil
 }
 
-func (r *UserRepository) GetProfileByUserID(userID int64) (*models.Profile, error) {
+func (r *UserRepository) GetProfileByUserID(ctx context.Context, userID int64) (*models.Profile, error) {
 	var profile models.Profile
 	query := "SELECT id, user_id, full_name, avatar_url, phone_number, date_of_birth, created_at, updated_at FROM profiles WHERE user_id = $1 LIMIT 1"
-	err := r.db.Get(&profile, query, userID)
+	err := r.db.GetContext(ctx, &profile, query, userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil // Not found
@@ -110,10 +110,10 @@ func (r *UserRepository) GetProfileByUserID(userID int64) (*models.Profile, erro
 	return &profile, nil
 }
 
-func (r *UserRepository) GetUserByID(userID int64) (*models.User, error) {
+func (r *UserRepository) GetUserByID(ctx context.Context, userID int64) (*models.User, error) {
 	var user models.User
 	query := "SELECT id, username, email, password_hash, google_id, created_at, updated_at FROM users WHERE id = $1 LIMIT 1"
-	err := r.db.Get(&user, query, userID)
+	err := r.db.GetContext(ctx, &user, query, userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil // Not found
@@ -123,13 +123,13 @@ func (r *UserRepository) GetUserByID(userID int64) (*models.User, error) {
 	return &user, nil
 }
 
-func (r *UserRepository) LinkGoogleAccount(userID int64, googleID string) error {
+func (r *UserRepository) LinkGoogleAccount(ctx context.Context, userID int64, googleID string) error {
 	query := "UPDATE users SET google_id = $1, updated_at = NOW() WHERE id = $2"
-	_, err := r.db.Exec(query, googleID, userID)
+	_, err := r.db.ExecContext(ctx, query, googleID, userID)
 	return err
 }
 
-func (r *UserRepository) UpdateProfile(userID int64, req *models.UpdateProfileRequest) (*models.Profile, error) {
+func (r *UserRepository) UpdateProfile(ctx context.Context, userID int64, req *models.UpdateProfileRequest) (*models.Profile, error) {
 	var profile models.Profile
 	query := `
 		UPDATE profiles
@@ -142,7 +142,7 @@ func (r *UserRepository) UpdateProfile(userID int64, req *models.UpdateProfileRe
 		WHERE user_id = $5
 		RETURNING id, user_id, full_name, avatar_url, phone_number, date_of_birth, created_at, updated_at
 	`
-	err := r.db.QueryRowx(query,
+	err := r.db.QueryRowxContext(ctx, query,
 		req.FullName, req.AvatarURL, req.PhoneNumber, req.DateOfBirth, userID,
 	).StructScan(&profile)
 	if err != nil {

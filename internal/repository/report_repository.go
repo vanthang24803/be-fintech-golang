@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -17,7 +18,7 @@ func NewReportRepository(db *sqlx.DB) *ReportRepository {
 }
 
 // GetCategorySummary aggregates expenses by category for a period
-func (r *ReportRepository) GetCategorySummary(userID int64, start, end time.Time) ([]*models.CategorySummary, error) {
+func (r *ReportRepository) GetCategorySummary(ctx context.Context, userID int64, start, end time.Time) ([]*models.CategorySummary, error) {
 	var summary []*models.CategorySummary
 	query := `
 		SELECT 
@@ -31,14 +32,14 @@ func (r *ReportRepository) GetCategorySummary(userID int64, start, end time.Time
 		GROUP BY c.id, c.name, c.icon
 		ORDER BY total_amount DESC
 	`
-	if err := r.db.Select(&summary, query, userID, start, end); err != nil {
+	if err := r.db.SelectContext(ctx, &summary, query, userID, start, end); err != nil {
 		return nil, err
 	}
 	return summary, nil
 }
 
 // GetMonthlyTrend aggregates income and expense totals grouped by month
-func (r *ReportRepository) GetMonthlyTrend(userID int64, since time.Time) ([]*models.MonthlySummary, error) {
+func (r *ReportRepository) GetMonthlyTrend(ctx context.Context, userID int64, since time.Time) ([]*models.MonthlySummary, error) {
 	var trend []*models.MonthlySummary
 	query := `
 		SELECT 
@@ -50,7 +51,7 @@ func (r *ReportRepository) GetMonthlyTrend(userID int64, since time.Time) ([]*mo
 		GROUP BY month
 		ORDER BY month DESC
 	`
-	if err := r.db.Select(&trend, query, userID, since); err != nil {
+	if err := r.db.SelectContext(ctx, &trend, query, userID, since); err != nil {
 		return nil, err
 	}
 	return trend, nil

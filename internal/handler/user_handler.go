@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"context"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/maynguyen24/sever/internal/models"
 	"github.com/maynguyen24/sever/pkg/response"
@@ -8,9 +10,9 @@ import (
 )
 
 type UserService interface {
-	RegisterUser(req *models.RegisterRequest) (*models.User, error)
-	GetProfile(userID int64) (*models.ProfileResponse, error)
-	UpdateProfile(userID int64, req *models.UpdateProfileRequest) (*models.Profile, error)
+	RegisterUser(ctx context.Context, req *models.RegisterRequest) (*models.User, error)
+	GetProfile(ctx context.Context, userID int64) (*models.ProfileResponse, error)
+	UpdateProfile(ctx context.Context, userID int64, req *models.UpdateProfileRequest) (*models.Profile, error)
 }
 
 type UserHandler struct {
@@ -32,7 +34,7 @@ func (h *UserHandler) Register(c *fiber.Ctx) error {
 		return err
 	}
 
-	user, err := h.service.RegisterUser(&req)
+	user, err := h.service.RegisterUser(c.Context(), &req)
 	if err != nil {
 		return err
 	}
@@ -47,7 +49,7 @@ func (h *UserHandler) GetProfile(c *fiber.Ctx) error {
 		return err
 	}
 
-	res, err := h.service.GetProfile(userID)
+	res, err := h.service.GetProfile(c.Context(), userID)
 	if err != nil {
 		return err
 	}
@@ -70,7 +72,7 @@ func (h *UserHandler) UpdateProfile(c *fiber.Ctx) error {
 		return err
 	}
 
-	profile, err := h.service.UpdateProfile(userID, &req)
+	profile, err := h.service.UpdateProfile(c.Context(), userID, &req)
 	if err != nil {
 		return err
 	}

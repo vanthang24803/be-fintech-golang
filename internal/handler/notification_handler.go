@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
@@ -10,10 +11,10 @@ import (
 
 // NotificationService defines the contract for the handler layer
 type NotificationService interface {
-	GetList(userID int64, filter models.NotificationFilter) ([]*models.Notification, error)
-	GetUnreadCount(userID int64) (int, error)
-	MarkRead(userID int64, req *models.MarkReadRequest) error
-	Delete(userID int64, id int64) error
+	GetList(ctx context.Context, userID int64, filter models.NotificationFilter) ([]*models.Notification, error)
+	GetUnreadCount(ctx context.Context, userID int64) (int, error)
+	MarkRead(ctx context.Context, userID int64, req *models.MarkReadRequest) error
+	Delete(ctx context.Context, userID int64, id int64) error
 }
 
 type NotificationHandler struct {
@@ -36,7 +37,7 @@ func (h *NotificationHandler) List(c *fiber.Ctx) error {
 		// Ignore error, use default filter
 	}
 
-	notifications, err := h.service.GetList(userID, filter)
+	notifications, err := h.service.GetList(c.Context(), userID, filter)
 	if err != nil {
 		return err
 	}
@@ -51,7 +52,7 @@ func (h *NotificationHandler) UnreadCount(c *fiber.Ctx) error {
 		return err
 	}
 
-	count, err := h.service.GetUnreadCount(userID)
+	count, err := h.service.GetUnreadCount(c.Context(), userID)
 	if err != nil {
 		return err
 	}
@@ -71,7 +72,7 @@ func (h *NotificationHandler) MarkRead(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid request body")
 	}
 
-	if err := h.service.MarkRead(userID, &req); err != nil {
+	if err := h.service.MarkRead(c.Context(), userID, &req); err != nil {
 		return err
 	}
 
@@ -90,7 +91,7 @@ func (h *NotificationHandler) Delete(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid notification ID")
 	}
 
-	if err := h.service.Delete(userID, id); err != nil {
+	if err := h.service.Delete(c.Context(), userID, id); err != nil {
 		return err
 	}
 

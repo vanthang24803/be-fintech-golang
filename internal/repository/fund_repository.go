@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -21,7 +22,7 @@ func NewFundRepository(db *sqlx.DB) *FundRepository {
 }
 
 // Create inserts a new fund record
-func (r *FundRepository) Create(fund *models.Fund) error {
+func (r *FundRepository) Create(ctx context.Context, fund *models.Fund) error {
 	fund.ID = snowflake.GenerateID()
 	if fund.Currency == "" {
 		fund.Currency = "VND"
@@ -32,14 +33,14 @@ func (r *FundRepository) Create(fund *models.Fund) error {
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING created_at, updated_at
 	`
-	return r.db.QueryRowx(query,
+	return r.db.QueryRowxContext(ctx, query,
 		fund.ID, fund.UserID, fund.Name, fund.Description,
 		fund.TargetAmount, fund.Balance, fund.Currency,
 	).Scan(&fund.CreatedAt, &fund.UpdatedAt)
 }
 
 // GetAllByUserID returns all funds owned by the given user
-func (r *FundRepository) GetAllByUserID(userID int64) ([]*models.Fund, error) {
+func (r *FundRepository) GetAllByUserID(ctx context.Context, userID int64) ([]*models.Fund, error) {
 	var funds []*models.Fund
 	query := `
 		SELECT id, user_id, name, description, target_amount, balance, currency, created_at, updated_at
@@ -47,14 +48,14 @@ func (r *FundRepository) GetAllByUserID(userID int64) ([]*models.Fund, error) {
 		WHERE user_id = $1
 		ORDER BY created_at DESC
 	`
-	if err := r.db.Select(&funds, query, userID); err != nil {
+	if err := r.db.SelectContext(ctx, &funds, query, userID); err != nil {
 		return nil, err
 	}
 	return funds, nil
 }
 
 // GetByID fetches a single fund for the authenticated user
-func (r *FundRepository) GetByID(id, userID int64) (*models.Fund, error) {
+func (r *FundRepository) GetByID(ctx context.Context, id, userID int64) (*models.Fund, error) {
 	var fund models.Fund
 	query := `
 		SELECT id, user_id, name, description, target_amount, balance, currency, created_at, updated_at
@@ -62,7 +63,7 @@ func (r *FundRepository) GetByID(id, userID int64) (*models.Fund, error) {
 		WHERE id = $1 AND user_id = $2
 		LIMIT 1
 	`
-	err := r.db.Get(&fund, query, id, userID)
+	err := r.db.GetContext(ctx, &fund, query, id, userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
@@ -73,14 +74,14 @@ func (r *FundRepository) GetByID(id, userID int64) (*models.Fund, error) {
 }
 
 // Update modifies fund metadata (name, description, target, currency)
-func (r *FundRepository) Update(fund *models.Fund) error {
+func (r *FundRepository) Update(ctx context.Context, fund *models.Fund) error {
 	query := `
 		UPDATE funds
 		SET name = $1, description = $2, target_amount = $3, currency = $4, updated_at = NOW()
 		WHERE id = $5 AND user_id = $6
 		RETURNING updated_at
 	`
-	err := r.db.QueryRowx(query,
+	err := r.db.QueryRowxContext(ctx, query,
 		fund.Name, fund.Description, fund.TargetAmount, fund.Currency,
 		fund.ID, fund.UserID,
 	).Scan(&fund.UpdatedAt)
@@ -91,8 +92,8 @@ func (r *FundRepository) Update(fund *models.Fund) error {
 }
 
 // Delete removes a fund if it belongs to the user
-func (r *FundRepository) Delete(id, userID int64) error {
-	result, err := r.db.Exec(
+func (r *FundRepository) Delete(ctx context.Context, id, userID int64) error {
+	result, err := r.db.ExecContext(ctx, 
 		`DELETE FROM funds WHERE id = $1 AND user_id = $2`, id, userID,
 	)
 	if err != nil {
@@ -106,7 +107,7 @@ func (r *FundRepository) Delete(id, userID int64) error {
 }
 
 // Deposit adds amount to the fund balance atomically
-func (r *FundRepository) Deposit(id, userID int64, amount float64) (*models.Fund, error) {
+func (r *FundRepository) Deposit(ctx context.Context, id, userID int64, amount float64) (*models.Fund, error) {
 	var fund models.Fund
 	query := `
 		UPDATE funds
@@ -114,7 +115,7 @@ func (r *FundRepository) Deposit(id, userID int64, amount float64) (*models.Fund
 		WHERE id = $2 AND user_id = $3
 		RETURNING id, user_id, name, description, target_amount, balance, currency, created_at, updated_at
 	`
-	err := r.db.QueryRowx(query, amount, id, userID).StructScan(&fund)
+	err := r.db.QueryRowxContext(ctx, query, amount, id, userID).StructScan(&fund)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, apperr.ErrNotFound
@@ -125,7 +126,7 @@ func (r *FundRepository) Deposit(id, userID int64, amount float64) (*models.Fund
 }
 
 // Withdraw subtracts amount from the fund balance; returns error if balance insufficient
-func (r *FundRepository) Withdraw(id, userID int64, amount float64) (*models.Fund, error) {
+func (r *FundRepository) Withdraw(ctx context.Context, id, userID int64, amount float64) (*models.Fund, error) {
 	var fund models.Fund
 	query := `
 		UPDATE funds
@@ -133,11 +134,11 @@ func (r *FundRepository) Withdraw(id, userID int64, amount float64) (*models.Fun
 		WHERE id = $2 AND user_id = $3 AND balance >= $1
 		RETURNING id, user_id, name, description, target_amount, balance, currency, created_at, updated_at
 	`
-	err := r.db.QueryRowx(query, amount, id, userID).StructScan(&fund)
+	err := r.db.QueryRowxContext(ctx, query, amount, id, userID).StructScan(&fund)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			// Could be not found OR insufficient balance — check which
-			existing, checkErr := r.GetByID(id, userID)
+			existing, checkErr := r.GetByID(ctx, id, userID)
 			if checkErr != nil {
 				return nil, checkErr
 			}

@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"time"
@@ -21,7 +22,7 @@ func NewBudgetRepository(db *sqlx.DB) *BudgetRepository {
 }
 
 // Create inserts a new budget record
-func (r *BudgetRepository) Create(budget *models.Budget) error {
+func (r *BudgetRepository) Create(ctx context.Context, budget *models.Budget) error {
 	budget.ID = snowflake.GenerateID()
 
 	query := `
@@ -29,29 +30,29 @@ func (r *BudgetRepository) Create(budget *models.Budget) error {
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING created_at, updated_at
 	`
-	return r.db.QueryRowx(query,
+	return r.db.QueryRowxContext(ctx, query,
 		budget.ID, budget.UserID, budget.CategoryID, budget.Amount,
 		budget.Period, budget.StartDate, budget.EndDate, budget.IsActive,
 	).Scan(&budget.CreatedAt, &budget.UpdatedAt)
 }
 
 // GetByUserID fetches all budgets for a user
-func (r *BudgetRepository) GetByUserID(userID int64) ([]*models.Budget, error) {
+func (r *BudgetRepository) GetByUserID(ctx context.Context, userID int64) ([]*models.Budget, error) {
 	var budgets []*models.Budget
 	query := `SELECT id, user_id, category_id, amount, period, start_date, end_date, is_active, created_at, updated_at
 		FROM budgets WHERE user_id = $1 ORDER BY is_active DESC, end_date ASC`
-	if err := r.db.Select(&budgets, query, userID); err != nil {
+	if err := r.db.SelectContext(ctx, &budgets, query, userID); err != nil {
 		return nil, err
 	}
 	return budgets, nil
 }
 
 // GetByID fetches a specific budget record
-func (r *BudgetRepository) GetByID(id, userID int64) (*models.Budget, error) {
+func (r *BudgetRepository) GetByID(ctx context.Context, id, userID int64) (*models.Budget, error) {
 	var budget models.Budget
 	query := `SELECT id, user_id, category_id, amount, period, start_date, end_date, is_active, created_at, updated_at
 		FROM budgets WHERE id = $1 AND user_id = $2 LIMIT 1`
-	err := r.db.Get(&budget, query, id, userID)
+	err := r.db.GetContext(ctx, &budget, query, id, userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
@@ -62,7 +63,7 @@ func (r *BudgetRepository) GetByID(id, userID int64) (*models.Budget, error) {
 }
 
 // Update modifies budget settings
-func (r *BudgetRepository) Update(id, userID int64, req *models.UpdateBudgetRequest) (*models.Budget, error) {
+func (r *BudgetRepository) Update(ctx context.Context, id, userID int64, req *models.UpdateBudgetRequest) (*models.Budget, error) {
 	var budget models.Budget
 	query := `
 		UPDATE budgets
@@ -73,7 +74,7 @@ func (r *BudgetRepository) Update(id, userID int64, req *models.UpdateBudgetRequ
 		WHERE id = $3 AND user_id = $4
 		RETURNING id, user_id, category_id, amount, period, start_date, end_date, is_active, created_at, updated_at
 	`
-	err := r.db.QueryRowx(query, req.Amount, req.IsActive, id, userID).StructScan(&budget)
+	err := r.db.QueryRowxContext(ctx, query, req.Amount, req.IsActive, id, userID).StructScan(&budget)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil // Not found or wrong user
@@ -84,8 +85,8 @@ func (r *BudgetRepository) Update(id, userID int64, req *models.UpdateBudgetRequ
 }
 
 // Delete removes a budget record
-func (r *BudgetRepository) Delete(id, userID int64) error {
-	result, err := r.db.Exec(`DELETE FROM budgets WHERE id = $1 AND user_id = $2`, id, userID)
+func (r *BudgetRepository) Delete(ctx context.Context, id, userID int64) error {
+	result, err := r.db.ExecContext(ctx, `DELETE FROM budgets WHERE id = $1 AND user_id = $2`, id, userID)
 	if err != nil {
 		return err
 	}
@@ -97,7 +98,7 @@ func (r *BudgetRepository) Delete(id, userID int64) error {
 }
 
 // CalculateSpending returns total sum of expenses for a user and optional category within a date range
-func (r *BudgetRepository) CalculateSpending(userID int64, categoryID *int64, start, end time.Time) (float64, error) {
+func (r *BudgetRepository) CalculateSpending(ctx context.Context, userID int64, categoryID *int64, start, end time.Time) (float64, error) {
 	var total float64
 	query := `SELECT COALESCE(SUM(amount), 0) FROM transactions 
 		WHERE user_id = $1 AND type = 'expense' AND created_at >= $2 AND created_at <= $3`
@@ -108,7 +109,7 @@ func (r *BudgetRepository) CalculateSpending(userID int64, categoryID *int64, st
 		args = append(args, *categoryID)
 	}
 
-	if err := r.db.Get(&total, query, args...); err != nil {
+	if err := r.db.GetContext(ctx, &total, query, args...); err != nil {
 		return 0, err
 	}
 	return total, nil

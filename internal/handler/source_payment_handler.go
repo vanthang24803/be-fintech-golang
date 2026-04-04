@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
@@ -9,11 +10,11 @@ import (
 )
 
 type SourcePaymentService interface {
-	Create(userID int64, req *models.CreateSourcePaymentRequest) (*models.SourcePayment, error)
-	GetAll(userID int64) ([]*models.SourcePayment, error)
-	GetByID(id, userID int64) (*models.SourcePayment, error)
-	Update(id, userID int64, req *models.UpdateSourcePaymentRequest) (*models.SourcePayment, error)
-	Delete(id, userID int64) error
+	Create(ctx context.Context, userID int64, req *models.CreateSourcePaymentRequest) (*models.SourcePayment, error)
+	GetAll(ctx context.Context, userID int64) ([]*models.SourcePayment, error)
+	GetByID(ctx context.Context, id, userID int64) (*models.SourcePayment, error)
+	Update(ctx context.Context, id, userID int64, req *models.UpdateSourcePaymentRequest) (*models.SourcePayment, error)
+	Delete(ctx context.Context, id, userID int64) error
 }
 
 type SourcePaymentHandler struct {
@@ -49,7 +50,7 @@ func (h *SourcePaymentHandler) Create(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid request body")
 	}
 
-	source, err := h.service.Create(userID, &req)
+	source, err := h.service.Create(c.Context(), userID, &req)
 	if err != nil {
 		return err
 	}
@@ -64,7 +65,7 @@ func (h *SourcePaymentHandler) GetAll(c *fiber.Ctx) error {
 		return err
 	}
 
-	sources, err := h.service.GetAll(userID)
+	sources, err := h.service.GetAll(c.Context(), userID)
 	if err != nil {
 		return err
 	}
@@ -84,7 +85,7 @@ func (h *SourcePaymentHandler) GetByID(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid source payment ID")
 	}
 
-	source, err := h.service.GetByID(id, userID)
+	source, err := h.service.GetByID(c.Context(), id, userID)
 	if err != nil {
 		return err
 	}
@@ -109,7 +110,7 @@ func (h *SourcePaymentHandler) Update(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid request body")
 	}
 
-	source, err := h.service.Update(id, userID, &req)
+	source, err := h.service.Update(c.Context(), id, userID, &req)
 	if err != nil {
 		return err
 	}
@@ -129,7 +130,7 @@ func (h *SourcePaymentHandler) Delete(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid source payment ID")
 	}
 
-	if err := h.service.Delete(id, userID); err != nil {
+	if err := h.service.Delete(c.Context(), id, userID); err != nil {
 		return err
 	}
 

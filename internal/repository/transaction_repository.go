@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -21,7 +22,7 @@ func NewTransactionRepository(db *sqlx.DB) *TransactionRepository {
 }
 
 // Create inserts a transaction and atomically updates the source payment balance
-func (r *TransactionRepository) Create(tx *models.Transaction) error {
+func (r *TransactionRepository) Create(ctx context.Context, tx *models.Transaction) error {
 	tx.ID = snowflake.GenerateID()
 
 	// Determine balance delta: income → +amount, expense → -amount
@@ -32,7 +33,7 @@ func (r *TransactionRepository) Create(tx *models.Transaction) error {
 		balanceDelta = -tx.Amount
 	}
 
-	dbTx, err := r.db.Beginx()
+	dbTx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
@@ -44,7 +45,7 @@ func (r *TransactionRepository) Create(tx *models.Transaction) error {
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING created_at, updated_at
 	`
-	err = dbTx.QueryRowx(insertQuery,
+	err = dbTx.QueryRowxContext(ctx, insertQuery,
 		tx.ID, tx.UserID, tx.SourcePaymentID, tx.CategoryID,
 		tx.Amount, tx.Type, tx.Description, tx.TransactionDate,
 	).Scan(&tx.CreatedAt, &tx.UpdatedAt)
@@ -58,7 +59,7 @@ func (r *TransactionRepository) Create(tx *models.Transaction) error {
 		SET balance = balance + $1, updated_at = NOW()
 		WHERE id = $2 AND user_id = $3
 	`
-	result, err := dbTx.Exec(updateBalanceQuery, balanceDelta, tx.SourcePaymentID, tx.UserID)
+	result, err := dbTx.ExecContext(ctx, updateBalanceQuery, balanceDelta, tx.SourcePaymentID, tx.UserID)
 	if err != nil {
 		return fmt.Errorf("failed to update balance: %w", err)
 	}
@@ -71,7 +72,7 @@ func (r *TransactionRepository) Create(tx *models.Transaction) error {
 }
 
 // GetAllByUserID lists all transactions for a user with optional filters
-func (r *TransactionRepository) GetAllByUserID(userID int64, filter models.TransactionFilter) ([]*models.TransactionDetail, error) {
+func (r *TransactionRepository) GetAllByUserID(ctx context.Context, userID int64, filter models.TransactionFilter) ([]*models.TransactionDetail, error) {
 	query := `
 		SELECT
 			t.id, t.user_id, t.sourcepayment_id, t.category_id,
@@ -106,14 +107,14 @@ func (r *TransactionRepository) GetAllByUserID(userID int64, filter models.Trans
 	query += " ORDER BY t.transaction_date DESC, t.created_at DESC"
 
 	var txs []*models.TransactionDetail
-	if err := r.db.Select(&txs, query, args...); err != nil {
+	if err := r.db.SelectContext(ctx, &txs, query, args...); err != nil {
 		return nil, err
 	}
 	return txs, nil
 }
 
 // GetByID fetches a single transaction detail for the authenticated user
-func (r *TransactionRepository) GetByID(id, userID int64) (*models.TransactionDetail, error) {
+func (r *TransactionRepository) GetByID(ctx context.Context, id, userID int64) (*models.TransactionDetail, error) {
 	var tx models.TransactionDetail
 	query := `
 		SELECT
@@ -128,7 +129,7 @@ func (r *TransactionRepository) GetByID(id, userID int64) (*models.TransactionDe
 		WHERE t.id = $1 AND t.user_id = $2
 		LIMIT 1
 	`
-	err := r.db.Get(&tx, query, id, userID)
+	err := r.db.GetContext(ctx, &tx, query, id, userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
@@ -139,11 +140,11 @@ func (r *TransactionRepository) GetByID(id, userID int64) (*models.TransactionDe
 }
 
 // GetRawByID fetches a raw transaction (no join) for mutation operations
-func (r *TransactionRepository) GetRawByID(id, userID int64) (*models.Transaction, error) {
+func (r *TransactionRepository) GetRawByID(ctx context.Context, id, userID int64) (*models.Transaction, error) {
 	var tx models.Transaction
 	query := `SELECT id, user_id, sourcepayment_id, category_id, amount, type, description, transaction_date, created_at, updated_at
 		FROM transactions WHERE id = $1 AND user_id = $2 LIMIT 1`
-	err := r.db.Get(&tx, query, id, userID)
+	err := r.db.GetContext(ctx, &tx, query, id, userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
@@ -154,8 +155,8 @@ func (r *TransactionRepository) GetRawByID(id, userID int64) (*models.Transactio
 }
 
 // Update modifies a transaction and reverses + reapplies the balance delta atomically
-func (r *TransactionRepository) Update(old *models.Transaction, updated *models.Transaction) error {
-	dbTx, err := r.db.Beginx()
+func (r *TransactionRepository) Update(ctx context.Context, old *models.Transaction, updated *models.Transaction) error {
+	dbTx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
@@ -167,7 +168,7 @@ func (r *TransactionRepository) Update(old *models.Transaction, updated *models.
 	newDelta := map[string]float64{models.TransactionTypeIncome: updated.Amount, models.TransactionTypeExpense: -updated.Amount}[updated.Type]
 
 	// 1. Reverse old balance on old source
-	_, err = dbTx.Exec(
+	_, err = dbTx.ExecContext(ctx, 
 		`UPDATE sourcepayment SET balance = balance - $1, updated_at = NOW() WHERE id = $2 AND user_id = $3`,
 		oldDelta, old.SourcePaymentID, old.UserID,
 	)
@@ -176,7 +177,7 @@ func (r *TransactionRepository) Update(old *models.Transaction, updated *models.
 	}
 
 	// 2. Apply new balance on new source (may be same or different)
-	_, err = dbTx.Exec(
+	_, err = dbTx.ExecContext(ctx, 
 		`UPDATE sourcepayment SET balance = balance + $1, updated_at = NOW() WHERE id = $2 AND user_id = $3`,
 		newDelta, updated.SourcePaymentID, updated.UserID,
 	)
@@ -192,7 +193,7 @@ func (r *TransactionRepository) Update(old *models.Transaction, updated *models.
 		WHERE id = $7 AND user_id = $8
 		RETURNING updated_at
 	`
-	err = dbTx.QueryRowx(updateQuery,
+	err = dbTx.QueryRowxContext(ctx, updateQuery,
 		updated.SourcePaymentID, updated.CategoryID, updated.Amount, updated.Type,
 		updated.Description, updated.TransactionDate, updated.ID, updated.UserID,
 	).Scan(&updated.UpdatedAt)
@@ -204,9 +205,9 @@ func (r *TransactionRepository) Update(old *models.Transaction, updated *models.
 }
 
 // Delete removes a transaction and reverses its balance impact atomically
-func (r *TransactionRepository) Delete(id, userID int64) error {
+func (r *TransactionRepository) Delete(ctx context.Context, id, userID int64) error {
 	// Fetch the transaction first to know how to reverse balance
-	raw, err := r.GetRawByID(id, userID)
+	raw, err := r.GetRawByID(ctx, id, userID)
 	if err != nil {
 		return err
 	}
@@ -217,13 +218,13 @@ func (r *TransactionRepository) Delete(id, userID int64) error {
 	// Reverse: income was +amount → subtract; expense was -amount → add back
 	reverseDelta := map[string]float64{models.TransactionTypeIncome: -raw.Amount, models.TransactionTypeExpense: raw.Amount}[raw.Type]
 
-	dbTx, err := r.db.Beginx()
+	dbTx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer dbTx.Rollback()
 
-	_, err = dbTx.Exec(
+	_, err = dbTx.ExecContext(ctx, 
 		`DELETE FROM transactions WHERE id = $1 AND user_id = $2`,
 		id, userID,
 	)
@@ -231,7 +232,7 @@ func (r *TransactionRepository) Delete(id, userID int64) error {
 		return fmt.Errorf("failed to delete transaction: %w", err)
 	}
 
-	_, err = dbTx.Exec(
+	_, err = dbTx.ExecContext(ctx, 
 		`UPDATE sourcepayment SET balance = balance + $1, updated_at = NOW() WHERE id = $2 AND user_id = $3`,
 		reverseDelta, raw.SourcePaymentID, userID,
 	)

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
@@ -10,9 +11,9 @@ import (
 
 // DeviceService defines the contract for the handler layer
 type DeviceService interface {
-	Register(userID int64, req *models.RegisterDeviceRequest) (*models.Device, error)
-	GetList(userID int64) ([]*models.Device, error)
-	Remove(userID int64, deviceID int64) error
+	Register(ctx context.Context, userID int64, req *models.RegisterDeviceRequest) (*models.Device, error)
+	GetList(ctx context.Context, userID int64) ([]*models.Device, error)
+	Remove(ctx context.Context, userID int64, deviceID int64) error
 }
 
 type DeviceHandler struct {
@@ -35,7 +36,7 @@ func (h *DeviceHandler) Register(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid request body")
 	}
 
-	device, err := h.service.Register(userID, &req)
+	device, err := h.service.Register(c.Context(), userID, &req)
 	if err != nil {
 		return err
 	}
@@ -50,7 +51,7 @@ func (h *DeviceHandler) List(c *fiber.Ctx) error {
 		return err
 	}
 
-	devices, err := h.service.GetList(userID)
+	devices, err := h.service.GetList(c.Context(), userID)
 	if err != nil {
 		return err
 	}
@@ -70,7 +71,7 @@ func (h *DeviceHandler) Delete(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid device ID")
 	}
 
-	if err := h.service.Remove(userID, id); err != nil {
+	if err := h.service.Remove(c.Context(), userID, id); err != nil {
 		return err
 	}
 

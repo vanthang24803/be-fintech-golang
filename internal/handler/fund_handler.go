@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
@@ -10,13 +11,13 @@ import (
 
 // FundService defines the contract for the handler layer
 type FundService interface {
-	Create(userID int64, req *models.CreateFundRequest) (*models.Fund, error)
-	GetAll(userID int64) ([]*models.Fund, error)
-	GetByID(id, userID int64) (*models.Fund, error)
-	Update(id, userID int64, req *models.UpdateFundRequest) (*models.Fund, error)
-	Delete(id, userID int64) error
-	Deposit(id, userID int64, req *models.FundTransactionRequest) (*models.Fund, error)
-	Withdraw(id, userID int64, req *models.FundTransactionRequest) (*models.Fund, error)
+	Create(ctx context.Context, userID int64, req *models.CreateFundRequest) (*models.Fund, error)
+	GetAll(ctx context.Context, userID int64) ([]*models.Fund, error)
+	GetByID(ctx context.Context, id, userID int64) (*models.Fund, error)
+	Update(ctx context.Context, id, userID int64, req *models.UpdateFundRequest) (*models.Fund, error)
+	Delete(ctx context.Context, id, userID int64) error
+	Deposit(ctx context.Context, id, userID int64, req *models.FundTransactionRequest) (*models.Fund, error)
+	Withdraw(ctx context.Context, id, userID int64, req *models.FundTransactionRequest) (*models.Fund, error)
 }
 
 type FundHandler struct {
@@ -39,7 +40,7 @@ func (h *FundHandler) Create(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid request body")
 	}
 
-	fund, err := h.service.Create(userID, &req)
+	fund, err := h.service.Create(c.Context(), userID, &req)
 	if err != nil {
 		return err
 	}
@@ -54,7 +55,7 @@ func (h *FundHandler) GetAll(c *fiber.Ctx) error {
 		return err
 	}
 
-	funds, err := h.service.GetAll(userID)
+	funds, err := h.service.GetAll(c.Context(), userID)
 	if err != nil {
 		return err
 	}
@@ -74,7 +75,7 @@ func (h *FundHandler) GetByID(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid fund ID")
 	}
 
-	fund, err := h.service.GetByID(id, userID)
+	fund, err := h.service.GetByID(c.Context(), id, userID)
 	if err != nil {
 		return err
 	}
@@ -99,7 +100,7 @@ func (h *FundHandler) Update(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid request body")
 	}
 
-	fund, err := h.service.Update(id, userID, &req)
+	fund, err := h.service.Update(c.Context(), id, userID, &req)
 	if err != nil {
 		return err
 	}
@@ -119,7 +120,7 @@ func (h *FundHandler) Delete(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid fund ID")
 	}
 
-	if err := h.service.Delete(id, userID); err != nil {
+	if err := h.service.Delete(c.Context(), id, userID); err != nil {
 		return err
 	}
 
@@ -143,7 +144,7 @@ func (h *FundHandler) Deposit(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid request body")
 	}
 
-	fund, err := h.service.Deposit(id, userID, &req)
+	fund, err := h.service.Deposit(c.Context(), id, userID, &req)
 	if err != nil {
 		return err
 	}
@@ -168,7 +169,7 @@ func (h *FundHandler) Withdraw(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid request body")
 	}
 
-	fund, err := h.service.Withdraw(id, userID, &req)
+	fund, err := h.service.Withdraw(c.Context(), id, userID, &req)
 	if err != nil {
 		return err
 	}

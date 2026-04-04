@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
@@ -9,11 +10,11 @@ import (
 )
 
 type SavingsGoalService interface {
-	Create(userID int64, req *models.CreateGoalRequest) (*models.SavingsGoal, error)
-	List(userID int64) ([]models.SavingsGoal, error)
-	GetDetail(id int64, userID int64) (*models.GoalResponse, error)
-	Contribute(userID int64, req *models.GoalContributeRequest) (*models.SavingsGoal, error)
-	Withdraw(userID int64, req *models.GoalWithdrawRequest) (*models.SavingsGoal, error)
+	Create(ctx context.Context, userID int64, req *models.CreateGoalRequest) (*models.SavingsGoal, error)
+	List(ctx context.Context, userID int64) ([]models.SavingsGoal, error)
+	GetDetail(ctx context.Context, id int64, userID int64) (*models.GoalResponse, error)
+	Contribute(ctx context.Context, userID int64, req *models.GoalContributeRequest) (*models.SavingsGoal, error)
+	Withdraw(ctx context.Context, userID int64, req *models.GoalWithdrawRequest) (*models.SavingsGoal, error)
 }
 
 type SavingsGoalHandler struct {
@@ -34,7 +35,7 @@ func (h *SavingsGoalHandler) Create(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "common.bad_request")
 	}
 
-	res, err := h.service.Create(userID, &req)
+	res, err := h.service.Create(c.Context(), userID, &req)
 	if err != nil {
 		return err
 	}
@@ -47,7 +48,7 @@ func (h *SavingsGoalHandler) List(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	res, err := h.service.List(userID)
+	res, err := h.service.List(c.Context(), userID)
 	if err != nil {
 		return err
 	}
@@ -65,7 +66,7 @@ func (h *SavingsGoalHandler) GetDetail(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid ID")
 	}
 
-	res, err := h.service.GetDetail(id, userID)
+	res, err := h.service.GetDetail(c.Context(), id, userID)
 	if err != nil {
 		return err
 	}
@@ -83,7 +84,7 @@ func (h *SavingsGoalHandler) Contribute(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "common.bad_request")
 	}
 
-	res, err := h.service.Contribute(userID, &req)
+	res, err := h.service.Contribute(c.Context(), userID, &req)
 	if err != nil {
 		return err
 	}
@@ -101,7 +102,7 @@ func (h *SavingsGoalHandler) Withdraw(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "common.bad_request")
 	}
 
-	res, err := h.service.Withdraw(userID, &req)
+	res, err := h.service.Withdraw(c.Context(), userID, &req)
 	if err != nil {
 		return err
 	}

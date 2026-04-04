@@ -10,25 +10,25 @@ import (
 var DB *sqlx.DB
 
 // Connect initializes the database connection using a provided DSN
-func Connect(dsn string) error {
+func Connect(dsn string) (*sqlx.DB, error) {
 	if dsn == "" {
-		return fmt.Errorf("DATABASE_URL is not provided")
+		return nil, fmt.Errorf("DATABASE_URL is not provided")
 	}
 
 	// sqlx.Connect automatically calls Ping to ensure connection is valid
 	db, err := sqlx.Connect("pgx", dsn)
 	if err != nil {
-		return fmt.Errorf("failed to connect to database: %w", err)
+		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
-	DB = db
+	DB = db // Still keeping for backward compatibility if needed, but we'll return it
 
 	// Auto-migrate schema on start
 	if err := RunDBMigration(dsn); err != nil {
-		return fmt.Errorf("auto-migration failed: %w", err)
+		return nil, fmt.Errorf("auto-migration failed: %w", err)
 	}
 
-	return nil
+	return db, nil
 }
 
 // Close gracefully closes the database connection

@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -19,7 +20,7 @@ func NewSourcePaymentRepository(db *sqlx.DB) *SourcePaymentRepository {
 	return &SourcePaymentRepository{db: db}
 }
 
-func (r *SourcePaymentRepository) Create(source *models.SourcePayment) error {
+func (r *SourcePaymentRepository) Create(ctx context.Context, source *models.SourcePayment) error {
 	source.ID = snowflake.GenerateID()
 	if source.Currency == "" {
 		source.Currency = "VND"
@@ -30,26 +31,26 @@ func (r *SourcePaymentRepository) Create(source *models.SourcePayment) error {
 		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING created_at, updated_at
 	`
-	return r.db.QueryRowx(query,
+	return r.db.QueryRowxContext(ctx, query,
 		source.ID, source.UserID, source.Name, source.Type, source.Balance, source.Currency,
 	).Scan(&source.CreatedAt, &source.UpdatedAt)
 }
 
-func (r *SourcePaymentRepository) GetAllByUserID(userID int64) ([]*models.SourcePayment, error) {
+func (r *SourcePaymentRepository) GetAllByUserID(ctx context.Context, userID int64) ([]*models.SourcePayment, error) {
 	var sources []*models.SourcePayment
 	query := `SELECT id, user_id, name, type, balance, currency, created_at, updated_at
 		FROM sourcepayment WHERE user_id = $1 ORDER BY created_at DESC`
-	if err := r.db.Select(&sources, query, userID); err != nil {
+	if err := r.db.SelectContext(ctx, &sources, query, userID); err != nil {
 		return nil, err
 	}
 	return sources, nil
 }
 
-func (r *SourcePaymentRepository) GetByID(id, userID int64) (*models.SourcePayment, error) {
+func (r *SourcePaymentRepository) GetByID(ctx context.Context, id, userID int64) (*models.SourcePayment, error) {
 	var source models.SourcePayment
 	query := `SELECT id, user_id, name, type, balance, currency, created_at, updated_at
 		FROM sourcepayment WHERE id = $1 AND user_id = $2 LIMIT 1`
-	err := r.db.Get(&source, query, id, userID)
+	err := r.db.GetContext(ctx, &source, query, id, userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
@@ -59,14 +60,14 @@ func (r *SourcePaymentRepository) GetByID(id, userID int64) (*models.SourcePayme
 	return &source, nil
 }
 
-func (r *SourcePaymentRepository) Update(source *models.SourcePayment) error {
+func (r *SourcePaymentRepository) Update(ctx context.Context, source *models.SourcePayment) error {
 	query := `
 		UPDATE sourcepayment
 		SET name = $1, type = $2, currency = $3, updated_at = NOW()
 		WHERE id = $4 AND user_id = $5
 		RETURNING updated_at
 	`
-	err := r.db.QueryRowx(query,
+	err := r.db.QueryRowxContext(ctx, query,
 		source.Name, source.Type, source.Currency, source.ID, source.UserID,
 	).Scan(&source.UpdatedAt)
 	if err != nil {
@@ -75,9 +76,9 @@ func (r *SourcePaymentRepository) Update(source *models.SourcePayment) error {
 	return nil
 }
 
-func (r *SourcePaymentRepository) Delete(id, userID int64) error {
+func (r *SourcePaymentRepository) Delete(ctx context.Context, id, userID int64) error {
 	query := `DELETE FROM sourcepayment WHERE id = $1 AND user_id = $2`
-	result, err := r.db.Exec(query, id, userID)
+	result, err := r.db.ExecContext(ctx, query, id, userID)
 	if err != nil {
 		return fmt.Errorf("failed to delete source payment: %w", err)
 	}

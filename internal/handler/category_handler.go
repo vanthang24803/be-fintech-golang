@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
@@ -11,11 +12,11 @@ import (
 
 // CategoryService defines the contract for the handler layer
 type CategoryService interface {
-	Create(userID int64, req *models.CreateCategoryRequest) (*models.Category, error)
-	GetAll(userID int64) ([]*models.Category, error)
-	GetByID(id, userID int64) (*models.Category, error)
-	Update(id, userID int64, req *models.UpdateCategoryRequest) (*models.Category, error)
-	Delete(id, userID int64) error
+	Create(ctx context.Context, userID int64, req *models.CreateCategoryRequest) (*models.Category, error)
+	GetAll(ctx context.Context, userID int64) ([]*models.Category, error)
+	GetByID(ctx context.Context, id, userID int64) (*models.Category, error)
+	Update(ctx context.Context, id, userID int64, req *models.UpdateCategoryRequest) (*models.Category, error)
+	Delete(ctx context.Context, id, userID int64) error
 }
 
 type CategoryHandler struct {
@@ -42,7 +43,7 @@ func (h *CategoryHandler) Create(c *fiber.Ctx) error {
 		return err
 	}
 
-	cat, err := h.service.Create(userID, &req)
+	cat, err := h.service.Create(c.Context(), userID, &req)
 	if err != nil {
 		return err
 	}
@@ -57,7 +58,7 @@ func (h *CategoryHandler) GetAll(c *fiber.Ctx) error {
 		return err
 	}
 
-	cats, err := h.service.GetAll(userID)
+	cats, err := h.service.GetAll(c.Context(), userID)
 	if err != nil {
 		return err
 	}
@@ -77,7 +78,7 @@ func (h *CategoryHandler) GetByID(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid category ID")
 	}
 
-	cat, err := h.service.GetByID(id, userID)
+	cat, err := h.service.GetByID(c.Context(), id, userID)
 	if err != nil {
 		return err
 	}
@@ -106,7 +107,7 @@ func (h *CategoryHandler) Update(c *fiber.Ctx) error {
 		return err
 	}
 
-	cat, err := h.service.Update(id, userID, &req)
+	cat, err := h.service.Update(c.Context(), id, userID, &req)
 	if err != nil {
 		return err
 	}
@@ -126,7 +127,7 @@ func (h *CategoryHandler) Delete(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid category ID")
 	}
 
-	if err := h.service.Delete(id, userID); err != nil {
+	if err := h.service.Delete(c.Context(), id, userID); err != nil {
 		return err
 	}
 

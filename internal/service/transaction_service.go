@@ -1,12 +1,12 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
 	"github.com/maynguyen24/sever/internal/models"
 	"github.com/maynguyen24/sever/pkg/apperr"
 	"github.com/maynguyen24/sever/pkg/queue"
@@ -14,23 +14,23 @@ import (
 
 // TransactionRepository defines the DB contract for this service
 type TransactionRepository interface {
-	Create(tx *models.Transaction) error
-	GetAllByUserID(userID int64, filter models.TransactionFilter) ([]*models.TransactionDetail, error)
-	GetByID(id, userID int64) (*models.TransactionDetail, error)
-	GetRawByID(id, userID int64) (*models.Transaction, error)
-	Update(old *models.Transaction, updated *models.Transaction) error
-	Delete(id, userID int64) error
+	Create(ctx context.Context, tx *models.Transaction) error
+	GetAllByUserID(ctx context.Context, userID int64, filter models.TransactionFilter) ([]*models.TransactionDetail, error)
+	GetByID(ctx context.Context, id, userID int64) (*models.TransactionDetail, error)
+	GetRawByID(ctx context.Context, id, userID int64) (*models.Transaction, error)
+	Update(ctx context.Context, old *models.Transaction, updated *models.Transaction) error
+	Delete(ctx context.Context, id, userID int64) error
 }
 
 // txBudgetRepo is a subset of BudgetRepository used by TransactionService
 type txBudgetRepo interface {
-	GetByUserID(userID int64) ([]*models.Budget, error)
-	CalculateSpending(userID int64, categoryID *int64, start, end time.Time) (float64, error)
+	GetByUserID(ctx context.Context, userID int64) ([]*models.Budget, error)
+	CalculateSpending(ctx context.Context, userID int64, categoryID *int64, start, end time.Time) (float64, error)
 }
 
 // txNotificationRepo is a subset of NotificationRepository used by TransactionService
 type txNotificationRepo interface {
-	Create(notif *models.Notification) error
+	Create(ctx context.Context, notif *models.Notification) error
 }
 
 type TransactionService struct {
@@ -54,12 +54,12 @@ func NewTransactionService(
 	}
 }
 
-func (s *TransactionService) Create(userID int64, req *models.CreateTransactionRequest) (*models.Transaction, error) {
+func (s *TransactionService) Create(ctx context.Context, userID int64, req *models.CreateTransactionRequest) (*models.Transaction, error) {
 	if req.Amount <= 0 {
-		return nil, fiber.NewError(fiber.StatusBadRequest, "Amount must be greater than 0")
+		return nil, fmt.Errorf("%w: Amount must be greater than 0", apperr.ErrInvalidInput)
 	}
 	if req.Type != models.TransactionTypeIncome && req.Type != models.TransactionTypeExpense {
-		return nil, fiber.NewError(fiber.StatusBadRequest, "Type must be 'income' or 'expense'")
+		return nil, fmt.Errorf("%w: Type must be 'income' or 'expense'", apperr.ErrInvalidInput)
 	}
 
 	tx := &models.Transaction{
@@ -72,7 +72,7 @@ func (s *TransactionService) Create(userID int64, req *models.CreateTransactionR
 		TransactionDate: req.TransactionDate,
 	}
 
-	if err := s.repo.Create(tx); err != nil {
+	if err := s.repo.Create(ctx, tx); err != nil {
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
 	}
 
@@ -86,8 +86,8 @@ func (s *TransactionService) Create(userID int64, req *models.CreateTransactionR
 	return tx, nil
 }
 
-func (s *TransactionService) CheckBudgets(userID int64, categoryID *int64) error {
-	budgets, err := s.budgetRepo.GetByUserID(userID)
+func (s *TransactionService) CheckBudgets(ctx context.Context, userID int64, categoryID *int64) error {
+	budgets, err := s.budgetRepo.GetByUserID(ctx, userID)
 	if err != nil {
 		return err
 	}
@@ -101,7 +101,7 @@ func (s *TransactionService) CheckBudgets(userID int64, categoryID *int64) error
 			continue
 		}
 
-		spending, err := s.budgetRepo.CalculateSpending(userID, b.CategoryID, b.StartDate, b.EndDate)
+		spending, err := s.budgetRepo.CalculateSpending(ctx, userID, b.CategoryID, b.StartDate, b.EndDate)
 		if err != nil {
 			continue
 		}
@@ -119,7 +119,7 @@ func (s *TransactionService) CheckBudgets(userID int64, categoryID *int64) error
 			continue // No notification needed
 		}
 
-		_ = s.notificationRepo.Create(&models.Notification{
+		_ = s.notificationRepo.Create(ctx, &models.Notification{
 			UserID:   userID,
 			Source:   "budget",
 			SourceID: &b.ID,
@@ -131,7 +131,7 @@ func (s *TransactionService) CheckBudgets(userID int64, categoryID *int64) error
 	return nil
 }
 
-func (s *TransactionService) GetAll(userID int64, query map[string]string) ([]*models.TransactionDetail, error) {
+func (s *TransactionService) GetAll(ctx context.Context, userID int64, query map[string]string) ([]*models.TransactionDetail, error) {
 	filter := models.TransactionFilter{}
 
 	if t := query["type"]; t != "" {
@@ -148,38 +148,38 @@ func (s *TransactionService) GetAll(userID int64, query map[string]string) ([]*m
 		}
 	}
 
-	txs, err := s.repo.GetAllByUserID(userID, filter)
+	txs, err := s.repo.GetAllByUserID(ctx, userID, filter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch transactions: %w", err)
 	}
 	return txs, nil
 }
 
-func (s *TransactionService) GetByID(id, userID int64) (*models.TransactionDetail, error) {
-	tx, err := s.repo.GetByID(id, userID)
+func (s *TransactionService) GetByID(ctx context.Context, id, userID int64) (*models.TransactionDetail, error) {
+	tx, err := s.repo.GetByID(ctx, id, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch transaction: %w", err)
 	}
 	if tx == nil {
-		return nil, fiber.NewError(fiber.StatusNotFound, "Transaction not found")
+		return nil, fmt.Errorf("%w: Transaction not found", apperr.ErrNotFound)
 	}
 	return tx, nil
 }
 
-func (s *TransactionService) Update(id, userID int64, req *models.UpdateTransactionRequest) (*models.Transaction, error) {
+func (s *TransactionService) Update(ctx context.Context, id, userID int64, req *models.UpdateTransactionRequest) (*models.Transaction, error) {
 	if req.Amount <= 0 {
-		return nil, fiber.NewError(fiber.StatusBadRequest, "Amount must be greater than 0")
+		return nil, fmt.Errorf("%w: Amount must be greater than 0", apperr.ErrInvalidInput)
 	}
 	if req.Type != models.TransactionTypeIncome && req.Type != models.TransactionTypeExpense {
-		return nil, fiber.NewError(fiber.StatusBadRequest, "Type must be 'income' or 'expense'")
+		return nil, fmt.Errorf("%w: Type must be 'income' or 'expense'", apperr.ErrInvalidInput)
 	}
 
-	old, err := s.repo.GetRawByID(id, userID)
+	old, err := s.repo.GetRawByID(ctx, id, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch transaction: %w", err)
 	}
 	if old == nil {
-		return nil, fiber.NewError(fiber.StatusNotFound, "Transaction not found")
+		return nil, fmt.Errorf("%w: Transaction not found", apperr.ErrNotFound)
 	}
 
 	updated := &models.Transaction{
@@ -193,16 +193,16 @@ func (s *TransactionService) Update(id, userID int64, req *models.UpdateTransact
 		TransactionDate: req.TransactionDate,
 	}
 
-	if err := s.repo.Update(old, updated); err != nil {
+	if err := s.repo.Update(ctx, old, updated); err != nil {
 		return nil, err
 	}
 	return updated, nil
 }
 
-func (s *TransactionService) Delete(id, userID int64) error {
-	if err := s.repo.Delete(id, userID); err != nil {
+func (s *TransactionService) Delete(ctx context.Context, id, userID int64) error {
+	if err := s.repo.Delete(ctx, id, userID); err != nil {
 		if errors.Is(err, apperr.ErrNotFound) {
-			return fiber.NewError(fiber.StatusNotFound, "Transaction not found")
+			return fmt.Errorf("%w: Transaction not found", apperr.ErrNotFound)
 		}
 		return err
 	}

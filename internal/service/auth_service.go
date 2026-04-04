@@ -1,13 +1,14 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/maynguyen24/sever/configs"
 	"github.com/maynguyen24/sever/internal/models"
+	"github.com/maynguyen24/sever/pkg/apperr"
 	jwtUtil "github.com/maynguyen24/sever/pkg/jwt"
 	"github.com/maynguyen24/sever/pkg/snowflake"
 	"golang.org/x/crypto/bcrypt"
@@ -18,9 +19,9 @@ import (
 
 // Define required interfaces where used
 type TokenRepository interface {
-	StoreRefreshToken(token *models.Token) error
-	RevokeToken(tokenString string) error
-	GetToken(tokenString string) (*models.Token, error)
+	StoreRefreshToken(ctx context.Context, token *models.Token) error
+	RevokeToken(ctx context.Context, tokenString string) error
+	GetToken(ctx context.Context, tokenString string) (*models.Token, error)
 }
 
 type AuthService struct {
@@ -52,19 +53,19 @@ func NewAuthService(userRepo UserRepository, tokenRepo TokenRepository, cfg *con
 	}
 }
 
-func (s *AuthService) GetGoogleAuthURL() string {
+func (s *AuthService) GetGoogleAuthURL(ctx context.Context) string {
 	return s.googleCfg.AuthCodeURL(s.oauthState, oauth2.AccessTypeOffline)
 }
 
-func (s *AuthService) HandleGoogleCallback(code string) (*models.LoginResponse, error) {
+func (s *AuthService) HandleGoogleCallback(ctx context.Context, code string) (*models.LoginResponse, error) {
 	// 1. Exchange code for token
-	token, err := s.googleCfg.Exchange(oauth2.NoContext, code)
+	token, err := s.googleCfg.Exchange(ctx, code)
 	if err != nil {
 		return nil, fmt.Errorf("google code exchange failed: %w", err)
 	}
 
 	// 2. Fetch User info from Google
-	client := s.googleCfg.Client(oauth2.NoContext, token)
+	client := s.googleCfg.Client(ctx, token)
 	oauth2Service, err := googleOAuth.New(client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create oauth2 service: %w", err)
@@ -77,21 +78,21 @@ func (s *AuthService) HandleGoogleCallback(code string) (*models.LoginResponse, 
 
 	// 3. Find or Create User
 	// Check by Google ID first
-	user, err := s.userRepo.GetUserByGoogleID(userInfo.Id)
+	user, err := s.userRepo.GetUserByGoogleID(ctx, userInfo.Id)
 	if err != nil {
 		return nil, err
 	}
 
 	if user == nil {
 		// Check by Email
-		user, err = s.userRepo.GetUserByEmail(userInfo.Email)
+		user, err = s.userRepo.GetUserByEmail(ctx, userInfo.Email)
 		if err != nil {
 			return nil, err
 		}
 
 		if user != nil {
 			// Link existing account
-			if err := s.userRepo.LinkGoogleAccount(user.ID, userInfo.Id); err != nil {
+			if err := s.userRepo.LinkGoogleAccount(ctx, user.ID, userInfo.Id); err != nil {
 				return nil, err
 			}
 			googleID := userInfo.Id
@@ -105,14 +106,14 @@ func (s *AuthService) HandleGoogleCallback(code string) (*models.LoginResponse, 
 				Email:    userInfo.Email,
 				GoogleID: &googleID,
 			}
-			if err := s.userRepo.CreateUser(user); err != nil {
+			if err := s.userRepo.CreateUser(ctx, user); err != nil {
 				return nil, err
 			}
 
 			// Update Profile with Google data
 			fullName := userInfo.Name
 			avatar := userInfo.Picture
-			_, _ = s.userRepo.UpdateProfile(user.ID, &models.UpdateProfileRequest{
+			_, _ = s.userRepo.UpdateProfile(ctx, user.ID, &models.UpdateProfileRequest{
 				FullName:  &fullName,
 				AvatarURL: &avatar,
 			})
@@ -132,7 +133,7 @@ func (s *AuthService) HandleGoogleCallback(code string) (*models.LoginResponse, 
 		TokenString: refreshToken,
 		ExpiresAt:   time.Now().Add(30 * 24 * time.Hour),
 	}
-	if err := s.tokenRepo.StoreRefreshToken(tokenRecord); err != nil {
+	if err := s.tokenRepo.StoreRefreshToken(ctx, tokenRecord); err != nil {
 		return nil, err
 	}
 
@@ -145,16 +146,16 @@ func (s *AuthService) HandleGoogleCallback(code string) (*models.LoginResponse, 
 	}, nil
 }
 
-func (s *AuthService) Login(req *models.LoginRequest) (*models.LoginResponse, error) {
+func (s *AuthService) Login(ctx context.Context, req *models.LoginRequest) (*models.LoginResponse, error) {
 	// 1. Find User by email or username
-	user, err := s.userRepo.GetUserByEmailOrUsername(req.Identifier, req.Identifier)
+	user, err := s.userRepo.GetUserByEmailOrUsername(ctx, req.Identifier, req.Identifier)
 	if err != nil {
-		return nil, fiber.NewError(fiber.StatusUnauthorized, "Invalid credentials")
+		return nil, fmt.Errorf("%w: invalid credentials", apperr.ErrUnauthorized)
 	}
 
 	// 2. Compare Password
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
-		return nil, fiber.NewError(fiber.StatusUnauthorized, "Invalid credentials")
+		return nil, fmt.Errorf("%w: invalid credentials", apperr.ErrUnauthorized)
 	}
 
 	// 3. Generate Token Pair (FIDO not verified by default on login)
@@ -171,7 +172,7 @@ func (s *AuthService) Login(req *models.LoginRequest) (*models.LoginResponse, er
 		ExpiresAt:   time.Now().Add(30 * 24 * time.Hour),
 	}
 	
-	if err := s.tokenRepo.StoreRefreshToken(tokenRecord); err != nil {
+	if err := s.tokenRepo.StoreRefreshToken(ctx, tokenRecord); err != nil {
 		return nil, fmt.Errorf("could not save session: %w", err)
 	}
 
@@ -185,29 +186,29 @@ func (s *AuthService) Login(req *models.LoginRequest) (*models.LoginResponse, er
 	}, nil
 }
 
-func (s *AuthService) RefreshToken(req *models.RefreshTokenRequest) (*models.TokenPair, error) {
+func (s *AuthService) RefreshToken(ctx context.Context, req *models.RefreshTokenRequest) (*models.TokenPair, error) {
 	// 1. Verify Refresh Token Signature using jwt library directly
 	token, err := jwt.ParseWithClaims(req.RefreshToken, &jwtUtil.TokenClaims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fiber.NewError(fiber.StatusUnauthorized, "Unexpected signing method")
+			return nil, fmt.Errorf("%w: unexpected signing method", apperr.ErrUnauthorized)
 		}
 		return []byte(s.cfg.JWTRefreshSecret), nil
 	})
 
 	if err != nil || !token.Valid {
-		return nil, fiber.NewError(fiber.StatusUnauthorized, "Invalid or expired refresh token")
+		return nil, fmt.Errorf("%w: invalid or expired refresh token", apperr.ErrUnauthorized)
 	}
 
 	claims, ok := token.Claims.(*jwtUtil.TokenClaims)
 	if !ok {
-		return nil, fiber.NewError(fiber.StatusUnauthorized, "Failed to parse claims")
+		return nil, fmt.Errorf("%w: failed to parse claims", apperr.ErrUnauthorized)
 	}
 
 	// 2. Look up the token in the Database (Anti-replay attack & session revocation check)
-	_, err = s.tokenRepo.GetToken(req.RefreshToken)
+	_, err = s.tokenRepo.GetToken(ctx, req.RefreshToken)
 	if err != nil {
 		// Token is either revoked, already used, or fake
-		return nil, fiber.NewError(fiber.StatusUnauthorized, "Session expired or revoked")
+		return nil, fmt.Errorf("%w: session expired or revoked", apperr.ErrUnauthorized)
 	}
 
 	// 3. Issue a new token pair (Preserve FIDO status from old token claims)
@@ -217,7 +218,7 @@ func (s *AuthService) RefreshToken(req *models.RefreshTokenRequest) (*models.Tok
 	}
 
 	// 4. Revoke Old Token (Transaction-like behavior: delete then insert)
-	if err := s.tokenRepo.RevokeToken(req.RefreshToken); err != nil {
+	if err := s.tokenRepo.RevokeToken(ctx, req.RefreshToken); err != nil {
 		return nil, fmt.Errorf("failed to revoke old token: %w", err)
 	}
 
@@ -228,7 +229,7 @@ func (s *AuthService) RefreshToken(req *models.RefreshTokenRequest) (*models.Tok
 		TokenString: newRefresh,
 		ExpiresAt:   time.Now().Add(30 * 24 * time.Hour),
 	}
-	if err := s.tokenRepo.StoreRefreshToken(tokenRecord); err != nil {
+	if err := s.tokenRepo.StoreRefreshToken(ctx, tokenRecord); err != nil {
 		return nil, fmt.Errorf("failed to store new refresh token: %w", err)
 	}
 
@@ -238,8 +239,8 @@ func (s *AuthService) RefreshToken(req *models.RefreshTokenRequest) (*models.Tok
 	}, nil
 }
 
-func (s *AuthService) Logout(req *models.LogoutRequest) error {
-	if err := s.tokenRepo.RevokeToken(req.RefreshToken); err != nil {
+func (s *AuthService) Logout(ctx context.Context, req *models.LogoutRequest) error {
+	if err := s.tokenRepo.RevokeToken(ctx, req.RefreshToken); err != nil {
 		return fmt.Errorf("failed to revoke token during logout: %w", err)
 	}
 	return nil

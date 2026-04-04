@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
@@ -11,11 +12,11 @@ import (
 
 // BudgetService defines the contract for the handler layer
 type BudgetService interface {
-	Create(userID int64, req *models.CreateBudgetRequest) (*models.Budget, error)
-	GetList(userID int64) ([]*models.BudgetResponse, error)
-	GetDetail(id, userID int64) (*models.BudgetResponse, error)
-	Update(id, userID int64, req *models.UpdateBudgetRequest) (*models.Budget, error)
-	Delete(id, userID int64) error
+	Create(ctx context.Context, userID int64, req *models.CreateBudgetRequest) (*models.Budget, error)
+	GetList(ctx context.Context, userID int64) ([]*models.BudgetResponse, error)
+	GetDetail(ctx context.Context, id, userID int64) (*models.BudgetResponse, error)
+	Update(ctx context.Context, id, userID int64, req *models.UpdateBudgetRequest) (*models.Budget, error)
+	Delete(ctx context.Context, id, userID int64) error
 }
 
 type BudgetHandler struct {
@@ -42,7 +43,7 @@ func (h *BudgetHandler) Create(c *fiber.Ctx) error {
 		return err
 	}
 
-	budget, err := h.service.Create(userID, &req)
+	budget, err := h.service.Create(c.Context(), userID, &req)
 	if err != nil {
 		return err
 	}
@@ -57,7 +58,7 @@ func (h *BudgetHandler) List(c *fiber.Ctx) error {
 		return err
 	}
 
-	budgets, err := h.service.GetList(userID)
+	budgets, err := h.service.GetList(c.Context(), userID)
 	if err != nil {
 		return err
 	}
@@ -77,7 +78,7 @@ func (h *BudgetHandler) GetDetail(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid budget ID")
 	}
 
-	budget, err := h.service.GetDetail(id, userID)
+	budget, err := h.service.GetDetail(c.Context(), id, userID)
 	if err != nil {
 		return err
 	}
@@ -106,7 +107,7 @@ func (h *BudgetHandler) Update(c *fiber.Ctx) error {
 		return err
 	}
 
-	budget, err := h.service.Update(id, userID, &req)
+	budget, err := h.service.Update(c.Context(), id, userID, &req)
 	if err != nil {
 		return err
 	}
@@ -126,7 +127,7 @@ func (h *BudgetHandler) Delete(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid budget ID")
 	}
 
-	if err := h.service.Delete(id, userID); err != nil {
+	if err := h.service.Delete(c.Context(), id, userID); err != nil {
 		return err
 	}
 

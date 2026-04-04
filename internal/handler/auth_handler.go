@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"context"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/maynguyen24/sever/internal/models"
 	"github.com/maynguyen24/sever/pkg/response"
@@ -9,11 +11,11 @@ import (
 
 // AuthService interface defined where used
 type AuthService interface {
-	Login(req *models.LoginRequest) (*models.LoginResponse, error)
-	RefreshToken(req *models.RefreshTokenRequest) (*models.TokenPair, error)
-	Logout(req *models.LogoutRequest) error
-	GetGoogleAuthURL() string
-	HandleGoogleCallback(code string) (*models.LoginResponse, error)
+	Login(ctx context.Context, req *models.LoginRequest) (*models.LoginResponse, error)
+	RefreshToken(ctx context.Context, req *models.RefreshTokenRequest) (*models.TokenPair, error)
+	Logout(ctx context.Context, req *models.LogoutRequest) error
+	GetGoogleAuthURL(ctx context.Context) string
+	HandleGoogleCallback(ctx context.Context, code string) (*models.LoginResponse, error)
 }
 
 type AuthHandler struct {
@@ -25,7 +27,7 @@ func NewAuthHandler(service AuthService) *AuthHandler {
 }
 
 func (h *AuthHandler) GetGoogleAuthURL(c *fiber.Ctx) error {
-	url := h.service.GetGoogleAuthURL()
+	url := h.service.GetGoogleAuthURL(c.Context())
 	return response.Success(c, 2000, "common.success", fiber.Map{"url": url})
 }
 
@@ -45,7 +47,7 @@ func (h *AuthHandler) GoogleCallback(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "common.bad_request")
 	}
 
-	res, err := h.service.HandleGoogleCallback(code)
+	res, err := h.service.HandleGoogleCallback(c.Context(), code)
 	if err != nil {
 		return err
 	}
@@ -63,7 +65,7 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		return err
 	}
 
-	res, err := h.service.Login(&req)
+	res, err := h.service.Login(c.Context(), &req)
 	if err != nil {
 		return err // Let the central error handler manage this
 	}
@@ -81,7 +83,7 @@ func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
 		return err
 	}
 
-	res, err := h.service.RefreshToken(&req)
+	res, err := h.service.RefreshToken(c.Context(), &req)
 	if err != nil {
 		return err
 	}
@@ -99,7 +101,7 @@ func (h *AuthHandler) Logout(c *fiber.Ctx) error {
 		return err
 	}
 
-	if err := h.service.Logout(&req); err != nil {
+	if err := h.service.Logout(c.Context(), &req); err != nil {
 		return err
 	}
 

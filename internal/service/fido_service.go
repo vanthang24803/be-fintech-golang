@@ -10,9 +10,9 @@ import (
 
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
-	"github.com/gofiber/fiber/v2"
 	"github.com/maynguyen24/sever/configs"
 	"github.com/maynguyen24/sever/internal/models"
+	"github.com/maynguyen24/sever/pkg/apperr"
 	jwtUtil "github.com/maynguyen24/sever/pkg/jwt"
 	"github.com/redis/go-redis/v9"
 )
@@ -25,10 +25,10 @@ const (
 
 // FIDODeviceRepository defines the DB contract for the FIDO service
 type FIDODeviceRepository interface {
-	GetByID(id, userID int64) (*models.Device, error)
-	GetByCredentialID(credentialID string) (*models.Device, error)
-	UpdateFIDOCredential(deviceID int64, credentialID, publicKey, aaguid string, signCount int64) error
-	UpdateSignCount(deviceID int64, signCount int64) error
+	GetByID(ctx context.Context, id, userID int64) (*models.Device, error)
+	GetByCredentialID(ctx context.Context, credentialID string) (*models.Device, error)
+	UpdateFIDOCredential(ctx context.Context, deviceID int64, credentialID, publicKey, aaguid string, signCount int64) error
+	UpdateSignCount(ctx context.Context, deviceID int64, signCount int64) error
 }
 
 // FIDOService handles FIDO2 WebAuthn enrollment and step-up authentication
@@ -61,12 +61,12 @@ func NewFIDOService(deviceRepo FIDODeviceRepository, redisClient *redis.Client, 
 // BeginEnrollment generates a WebAuthn credential creation challenge for a device.
 // Returns the PublicKeyCredentialCreationOptions JSON to send to the client.
 func (s *FIDOService) BeginEnrollment(ctx context.Context, userID, deviceID int64) (*protocol.CredentialCreation, error) {
-	device, err := s.deviceRepo.GetByID(deviceID, userID)
+	device, err := s.deviceRepo.GetByID(ctx, deviceID, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch device: %w", err)
 	}
 	if device == nil {
-		return nil, fiber.NewError(fiber.StatusNotFound, "Device not found")
+		return nil, fmt.Errorf("%w: Device not found", apperr.ErrNotFound)
 	}
 
 	fidoUser := newFIDOUser(userID, device)
@@ -85,17 +85,17 @@ func (s *FIDOService) BeginEnrollment(ctx context.Context, userID, deviceID int6
 
 // FinishEnrollment verifies the attestation response from the client and stores the credential.
 func (s *FIDOService) FinishEnrollment(ctx context.Context, userID, deviceID int64, body []byte) (*models.Device, error) {
-	device, err := s.deviceRepo.GetByID(deviceID, userID)
+	device, err := s.deviceRepo.GetByID(ctx, deviceID, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch device: %w", err)
 	}
 	if device == nil {
-		return nil, fiber.NewError(fiber.StatusNotFound, "Device not found")
+		return nil, fmt.Errorf("%w: Device not found", apperr.ErrNotFound)
 	}
 
 	session, err := s.loadSession(ctx, fidoSessionEnrollPrefix+strconv.FormatInt(deviceID, 10))
 	if err != nil {
-		return nil, fiber.NewError(fiber.StatusBadRequest, "Challenge expired, please try again")
+		return nil, fmt.Errorf("%w: Challenge expired, please try again", apperr.ErrInvalidInput)
 	}
 	// Session is consumed — delete it immediately to prevent replay
 	s.redis.Del(ctx, fidoSessionEnrollPrefix+strconv.FormatInt(deviceID, 10))
@@ -104,24 +104,24 @@ func (s *FIDOService) FinishEnrollment(ctx context.Context, userID, deviceID int
 
 	parsedResponse, err := protocol.ParseCredentialCreationResponseBytes(body)
 	if err != nil {
-		return nil, fiber.NewError(fiber.StatusBadRequest, "Biometric verification failed")
+		return nil, fmt.Errorf("%w: Biometric verification failed", apperr.ErrInvalidInput)
 	}
 
 	credential, err := s.webauthn.CreateCredential(fidoUser, *session, parsedResponse)
 	if err != nil {
-		return nil, fiber.NewError(fiber.StatusBadRequest, "Biometric verification failed")
+		return nil, fmt.Errorf("%w: Biometric verification failed", apperr.ErrInvalidInput)
 	}
 
 	credentialID := base64.RawURLEncoding.EncodeToString(credential.ID)
 	publicKey := base64.StdEncoding.EncodeToString(credential.PublicKey)
 	aaguid := base64.StdEncoding.EncodeToString(credential.Authenticator.AAGUID)
 
-	if err := s.deviceRepo.UpdateFIDOCredential(deviceID, credentialID, publicKey, aaguid, int64(credential.Authenticator.SignCount)); err != nil {
+	if err := s.deviceRepo.UpdateFIDOCredential(ctx, deviceID, credentialID, publicKey, aaguid, int64(credential.Authenticator.SignCount)); err != nil {
 		return nil, fmt.Errorf("failed to save credential: %w", err)
 	}
 
 	// Reload device to return the updated record
-	updated, err := s.deviceRepo.GetByID(deviceID, userID)
+	updated, err := s.deviceRepo.GetByID(ctx, deviceID, userID)
 	if err != nil || updated == nil {
 		return nil, fmt.Errorf("failed to reload device: %w", err)
 	}
@@ -133,12 +133,12 @@ func (s *FIDOService) FinishEnrollment(ctx context.Context, userID, deviceID int
 // BeginAuthentication generates a WebAuthn assertion challenge for a known credential.
 // Returns the PublicKeyCredentialRequestOptions JSON to send to the client.
 func (s *FIDOService) BeginAuthentication(ctx context.Context, credentialID string) (*protocol.CredentialAssertion, error) {
-	device, err := s.deviceRepo.GetByCredentialID(credentialID)
+	device, err := s.deviceRepo.GetByCredentialID(ctx, credentialID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch device: %w", err)
 	}
 	if device == nil || device.FIDOCredentialID == nil {
-		return nil, fiber.NewError(fiber.StatusNotFound, "Credential not found")
+		return nil, fmt.Errorf("%w: Credential not found", apperr.ErrNotFound)
 	}
 
 	fidoUser := newFIDOUser(device.UserID, device)
@@ -162,20 +162,20 @@ func (s *FIDOService) FinishAuthentication(ctx context.Context, body []byte) (st
 		ID string `json:"id"`
 	}
 	if err := json.Unmarshal(body, &raw); err != nil || raw.ID == "" {
-		return "", fiber.NewError(fiber.StatusBadRequest, "Invalid request body")
+		return "", fmt.Errorf("%w: Invalid request body", apperr.ErrInvalidInput)
 	}
 
-	device, err := s.deviceRepo.GetByCredentialID(raw.ID)
+	device, err := s.deviceRepo.GetByCredentialID(ctx, raw.ID)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch device: %w", err)
 	}
 	if device == nil || device.FIDOCredentialID == nil {
-		return "", fiber.NewError(fiber.StatusNotFound, "Credential not found")
+		return "", fmt.Errorf("%w: Credential not found", apperr.ErrNotFound)
 	}
 
 	session, err := s.loadSession(ctx, fidoSessionAuthPrefix+raw.ID)
 	if err != nil {
-		return "", fiber.NewError(fiber.StatusBadRequest, "Challenge expired, please try again")
+		return "", fmt.Errorf("%w: Challenge expired, please try again", apperr.ErrInvalidInput)
 	}
 	// Session is consumed — delete it immediately to prevent replay
 	s.redis.Del(ctx, fidoSessionAuthPrefix+raw.ID)
@@ -184,20 +184,20 @@ func (s *FIDOService) FinishAuthentication(ctx context.Context, body []byte) (st
 
 	parsedResponse, err := protocol.ParseCredentialRequestResponseBytes(body)
 	if err != nil {
-		return "", fiber.NewError(fiber.StatusBadRequest, "Biometric verification failed")
+		return "", fmt.Errorf("%w: Biometric verification failed", apperr.ErrInvalidInput)
 	}
 
 	credential, err := s.webauthn.ValidateLogin(fidoUser, *session, parsedResponse)
 	if err != nil {
-		return "", fiber.NewError(fiber.StatusUnauthorized, "Biometric verification failed")
+		return "", fmt.Errorf("%w: Biometric verification failed", apperr.ErrUnauthorized)
 	}
 
 	// Replay protection: sign count must advance
 	if credential.Authenticator.CloneWarning {
-		return "", fiber.NewError(fiber.StatusUnauthorized, "Authenticator replay detected")
+		return "", fmt.Errorf("%w: Authenticator replay detected", apperr.ErrUnauthorized)
 	}
 
-	if err := s.deviceRepo.UpdateSignCount(device.ID, int64(credential.Authenticator.SignCount)); err != nil {
+	if err := s.deviceRepo.UpdateSignCount(ctx, device.ID, int64(credential.Authenticator.SignCount)); err != nil {
 		return "", fmt.Errorf("failed to update sign count: %w", err)
 	}
 

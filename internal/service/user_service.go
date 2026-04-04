@@ -1,24 +1,25 @@
 package service
 
 import (
+	"context"
 	"fmt"
 
-	"github.com/gofiber/fiber/v2"
 	"github.com/maynguyen24/sever/internal/models"
+	"github.com/maynguyen24/sever/pkg/apperr"
 	"github.com/maynguyen24/sever/pkg/snowflake"
 	"golang.org/x/crypto/bcrypt"
 )
 
 // UserRepository interface is defined where it is used (service layer)
 type UserRepository interface {
-	CreateUser(user *models.User) error
-	GetUserByEmailOrUsername(email, username string) (*models.User, error)
-	GetUserByEmail(email string) (*models.User, error)
-	GetUserByGoogleID(googleID string) (*models.User, error)
-	GetUserByID(userID int64) (*models.User, error)
-	GetProfileByUserID(userID int64) (*models.Profile, error)
-	UpdateProfile(userID int64, req *models.UpdateProfileRequest) (*models.Profile, error)
-	LinkGoogleAccount(userID int64, googleID string) error
+	CreateUser(ctx context.Context, user *models.User) error
+	GetUserByEmailOrUsername(ctx context.Context, email, username string) (*models.User, error)
+	GetUserByEmail(ctx context.Context, email string) (*models.User, error)
+	GetUserByGoogleID(ctx context.Context, googleID string) (*models.User, error)
+	GetUserByID(ctx context.Context, userID int64) (*models.User, error)
+	GetProfileByUserID(ctx context.Context, userID int64) (*models.Profile, error)
+	UpdateProfile(ctx context.Context, userID int64, req *models.UpdateProfileRequest) (*models.Profile, error)
+	LinkGoogleAccount(ctx context.Context, userID int64, googleID string) error
 }
 
 // UserService struct is exported directly
@@ -30,19 +31,19 @@ func NewUserService(repo UserRepository) *UserService {
 	return &UserService{repo: repo}
 }
 
-func (s *UserService) RegisterUser(req *models.RegisterRequest) (*models.User, error) {
+func (s *UserService) RegisterUser(ctx context.Context, req *models.RegisterRequest) (*models.User, error) {
 	// Simple Validation
 	if req.Username == "" || req.Email == "" || req.Password == "" {
-		return nil, fiber.NewError(fiber.StatusBadRequest, "Username, Email and Password are required")
+		return nil, fmt.Errorf("%w: Username, Email and Password are required", apperr.ErrInvalidInput)
 	}
 
 	// Check if user exists
-	existing, err := s.repo.GetUserByEmailOrUsername(req.Email, req.Username)
+	existing, err := s.repo.GetUserByEmailOrUsername(ctx, req.Email, req.Username)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check existing user: %w", err)
 	}
 	if existing != nil {
-		return nil, fiber.NewError(fiber.StatusConflict, "Username or Email already exists")
+		return nil, apperr.ErrConflict
 	}
 
 	// Hash password
@@ -60,28 +61,28 @@ func (s *UserService) RegisterUser(req *models.RegisterRequest) (*models.User, e
 	}
 
 	// Save to DB
-	if err := s.repo.CreateUser(user); err != nil {
+	if err := s.repo.CreateUser(ctx, user); err != nil {
 		return nil, fmt.Errorf("failed to save user: %w", err)
 	}
 
 	return user, nil
 }
 
-func (s *UserService) GetProfile(userID int64) (*models.ProfileResponse, error) {
-	user, err := s.repo.GetUserByID(userID)
+func (s *UserService) GetProfile(ctx context.Context, userID int64) (*models.ProfileResponse, error) {
+	user, err := s.repo.GetUserByID(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch user: %w", err)
 	}
 	if user == nil {
-		return nil, fiber.NewError(fiber.StatusNotFound, "User not found")
+		return nil, apperr.ErrNotFound
 	}
 
-	profile, err := s.repo.GetProfileByUserID(userID)
+	profile, err := s.repo.GetProfileByUserID(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch profile: %w", err)
 	}
 	if profile == nil {
-		return nil, fiber.NewError(fiber.StatusNotFound, "Profile not found")
+		return nil, apperr.ErrNotFound
 	}
 
 	return &models.ProfileResponse{
@@ -90,13 +91,13 @@ func (s *UserService) GetProfile(userID int64) (*models.ProfileResponse, error) 
 	}, nil
 }
 
-func (s *UserService) UpdateProfile(userID int64, req *models.UpdateProfileRequest) (*models.Profile, error) {
-	profile, err := s.repo.UpdateProfile(userID, req)
+func (s *UserService) UpdateProfile(ctx context.Context, userID int64, req *models.UpdateProfileRequest) (*models.Profile, error) {
+	profile, err := s.repo.UpdateProfile(ctx, userID, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update profile: %w", err)
 	}
 	if profile == nil {
-		return nil, fiber.NewError(fiber.StatusNotFound, "Profile not found")
+		return nil, apperr.ErrNotFound
 	}
 	return profile, nil
 }

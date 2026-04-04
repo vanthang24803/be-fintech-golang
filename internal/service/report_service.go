@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -9,8 +10,8 @@ import (
 
 // ReportRepository defines the DB contract for this service
 type ReportRepository interface {
-	GetCategorySummary(userID int64, start, end time.Time) ([]*models.CategorySummary, error)
-	GetMonthlyTrend(userID int64, since time.Time) ([]*models.MonthlySummary, error)
+	GetCategorySummary(ctx context.Context, userID int64, start, end time.Time) ([]*models.CategorySummary, error)
+	GetMonthlyTrend(ctx context.Context, userID int64, since time.Time) ([]*models.MonthlySummary, error)
 }
 
 type ReportService struct {
@@ -22,7 +23,7 @@ func NewReportService(repo ReportRepository) *ReportService {
 }
 
 // GetCategorySummary provides expenses aggregated by category, including percentages
-func (s *ReportService) GetCategorySummary(userID int64, req *models.ReportRequest) ([]*models.CategorySummary, error) {
+func (s *ReportService) GetCategorySummary(ctx context.Context, userID int64, req *models.ReportRequest) ([]*models.CategorySummary, error) {
 	// Default to current month if not provided
 	if req.StartDate.IsZero() {
 		now := time.Now()
@@ -30,7 +31,7 @@ func (s *ReportService) GetCategorySummary(userID int64, req *models.ReportReque
 		req.EndDate = now
 	}
 
-	summary, err := s.repo.GetCategorySummary(userID, req.StartDate, req.EndDate)
+	summary, err := s.repo.GetCategorySummary(ctx, userID, req.StartDate, req.EndDate)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch category summary: %w", err)
 	}
@@ -51,13 +52,13 @@ func (s *ReportService) GetCategorySummary(userID int64, req *models.ReportReque
 }
 
 // GetMonthlyTrend provides month-by-month income/expense trends
-func (s *ReportService) GetMonthlyTrend(userID int64, months int) ([]*models.MonthlySummary, error) {
+func (s *ReportService) GetMonthlyTrend(ctx context.Context, userID int64, months int) ([]*models.MonthlySummary, error) {
 	if months <= 0 {
 		months = 6 // Default to 6 months
 	}
 
 	since := time.Now().AddDate(0, -months, 0)
-	trend, err := s.repo.GetMonthlyTrend(userID, since)
+	trend, err := s.repo.GetMonthlyTrend(ctx, userID, since)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch monthly trend: %w", err)
 	}

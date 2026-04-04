@@ -40,7 +40,7 @@ func (h *Handlers) HandleCheckBudgetTask(ctx context.Context, t *asynq.Task) err
 	}
 
 	log.Printf("Worker: Checking budget for UserID %d", p.UserID)
-	if err := h.txService.CheckBudgets(p.UserID, p.CategoryID); err != nil {
+	if err := h.txService.CheckBudgets(ctx, p.UserID, p.CategoryID); err != nil {
 		return fmt.Errorf("failed to check budgets: %w", err)
 	}
 	return nil

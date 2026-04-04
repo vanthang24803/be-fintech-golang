@@ -28,7 +28,8 @@ func main() {
 	snowflake.Init(1)
 
 	// 3. Connect to Database (with error handling)
-	if err := database.Connect(cfg.DatabaseURL); err != nil {
+	db, err := database.Connect(cfg.DatabaseURL)
+	if err != nil {
 		log.Fatalf("Could not connect to database: %v", err)
 	}
 	log.Println("Database connected successfully!")
@@ -38,6 +39,7 @@ func main() {
 	srv := server.NewServer(
 		server.WithPort(cfg.Port),
 		server.WithConfig(cfg),
+		server.WithDB(db),
 	)
 	log.Fatalf("Server exited: %v", srv.Start())
 }

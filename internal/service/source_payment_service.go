@@ -1,19 +1,20 @@
 package service
 
 import (
+	"context"
 	"fmt"
 
-	"github.com/gofiber/fiber/v2"
 	"github.com/maynguyen24/sever/internal/models"
+	"github.com/maynguyen24/sever/pkg/apperr"
 )
 
 // SourcePaymentRepository defines the DB contract for this service
 type SourcePaymentRepository interface {
-	Create(source *models.SourcePayment) error
-	GetAllByUserID(userID int64) ([]*models.SourcePayment, error)
-	GetByID(id, userID int64) (*models.SourcePayment, error)
-	Update(source *models.SourcePayment) error
-	Delete(id, userID int64) error
+	Create(ctx context.Context, source *models.SourcePayment) error
+	GetAllByUserID(ctx context.Context, userID int64) ([]*models.SourcePayment, error)
+	GetByID(ctx context.Context, id, userID int64) (*models.SourcePayment, error)
+	Update(ctx context.Context, source *models.SourcePayment) error
+	Delete(ctx context.Context, id, userID int64) error
 }
 
 type SourcePaymentService struct {
@@ -24,9 +25,9 @@ func NewSourcePaymentService(repo SourcePaymentRepository) *SourcePaymentService
 	return &SourcePaymentService{repo: repo}
 }
 
-func (s *SourcePaymentService) Create(userID int64, req *models.CreateSourcePaymentRequest) (*models.SourcePayment, error) {
+func (s *SourcePaymentService) Create(ctx context.Context, userID int64, req *models.CreateSourcePaymentRequest) (*models.SourcePayment, error) {
 	if req.Name == "" || req.Type == "" {
-		return nil, fiber.NewError(fiber.StatusBadRequest, "Name and type are required")
+		return nil, fmt.Errorf("%w: Name and type are required", apperr.ErrInvalidInput)
 	}
 
 	currency := req.Currency
@@ -42,38 +43,38 @@ func (s *SourcePaymentService) Create(userID int64, req *models.CreateSourcePaym
 		Currency: currency,
 	}
 
-	if err := s.repo.Create(source); err != nil {
+	if err := s.repo.Create(ctx, source); err != nil {
 		return nil, fmt.Errorf("failed to create source payment: %w", err)
 	}
 	return source, nil
 }
 
-func (s *SourcePaymentService) GetAll(userID int64) ([]*models.SourcePayment, error) {
-	sources, err := s.repo.GetAllByUserID(userID)
+func (s *SourcePaymentService) GetAll(ctx context.Context, userID int64) ([]*models.SourcePayment, error) {
+	sources, err := s.repo.GetAllByUserID(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch source payments: %w", err)
 	}
 	return sources, nil
 }
 
-func (s *SourcePaymentService) GetByID(id, userID int64) (*models.SourcePayment, error) {
-	source, err := s.repo.GetByID(id, userID)
+func (s *SourcePaymentService) GetByID(ctx context.Context, id, userID int64) (*models.SourcePayment, error) {
+	source, err := s.repo.GetByID(ctx, id, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch source payment: %w", err)
 	}
 	if source == nil {
-		return nil, fiber.NewError(fiber.StatusNotFound, "Source payment not found")
+		return nil, fmt.Errorf("%w: Source payment not found", apperr.ErrNotFound)
 	}
 	return source, nil
 }
 
-func (s *SourcePaymentService) Update(id, userID int64, req *models.UpdateSourcePaymentRequest) (*models.SourcePayment, error) {
-	source, err := s.repo.GetByID(id, userID)
+func (s *SourcePaymentService) Update(ctx context.Context, id, userID int64, req *models.UpdateSourcePaymentRequest) (*models.SourcePayment, error) {
+	source, err := s.repo.GetByID(ctx, id, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch source payment: %w", err)
 	}
 	if source == nil {
-		return nil, fiber.NewError(fiber.StatusNotFound, "Source payment not found")
+		return nil, fmt.Errorf("%w: Source payment not found", apperr.ErrNotFound)
 	}
 
 	source.Name = req.Name
@@ -82,22 +83,22 @@ func (s *SourcePaymentService) Update(id, userID int64, req *models.UpdateSource
 		source.Currency = req.Currency
 	}
 
-	if err := s.repo.Update(source); err != nil {
+	if err := s.repo.Update(ctx, source); err != nil {
 		return nil, err
 	}
 	return source, nil
 }
 
-func (s *SourcePaymentService) Delete(id, userID int64) error {
-	source, err := s.repo.GetByID(id, userID)
+func (s *SourcePaymentService) Delete(ctx context.Context, id, userID int64) error {
+	source, err := s.repo.GetByID(ctx, id, userID)
 	if err != nil {
 		return fmt.Errorf("failed to fetch source payment: %w", err)
 	}
 	if source == nil {
-		return fiber.NewError(fiber.StatusNotFound, "Source payment not found")
+		return fmt.Errorf("%w: Source payment not found", apperr.ErrNotFound)
 	}
 
-	if err := s.repo.Delete(id, userID); err != nil {
+	if err := s.repo.Delete(ctx, id, userID); err != nil {
 		return err
 	}
 	return nil

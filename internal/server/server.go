@@ -1,11 +1,15 @@
 package server
 
 import (
+	"errors"
+
 	"github.com/gofiber/fiber/v2"
+	"github.com/jmoiron/sqlx"
 	"github.com/maynguyen24/sever/configs"
 	"github.com/maynguyen24/sever/internal/docs"
 	"github.com/maynguyen24/sever/internal/middleware"
 	"github.com/maynguyen24/sever/internal/router"
+	"github.com/maynguyen24/sever/pkg/apperr"
 	"github.com/maynguyen24/sever/pkg/logger"
 	"github.com/maynguyen24/sever/pkg/response"
 	"go.uber.org/zap"
@@ -15,6 +19,22 @@ import (
 var customErrorHandler = func(c *fiber.Ctx, err error) error {
 	code := fiber.StatusInternalServerError
 	message := "Internal Server Error"
+
+	// Map business errors to HTTP codes
+	switch {
+	case errors.Is(err, apperr.ErrNotFound):
+		code = fiber.StatusNotFound
+		message = err.Error()
+	case errors.Is(err, apperr.ErrConflict):
+		code = fiber.StatusConflict
+		message = err.Error()
+	case errors.Is(err, apperr.ErrInvalidInput):
+		code = fiber.StatusBadRequest
+		message = err.Error()
+	case errors.Is(err, apperr.ErrUnauthorized):
+		code = fiber.StatusUnauthorized
+		message = err.Error()
+	}
 
 	if e, ok := err.(*fiber.Error); ok {
 		code = e.Code
@@ -33,6 +53,7 @@ type Server struct {
 	App  *fiber.App
 	port string
 	cfg  *configs.Config
+	db   *sqlx.DB
 }
 
 type Option func(*Server)
@@ -48,6 +69,13 @@ func WithPort(port string) Option {
 func WithConfig(cfg *configs.Config) Option {
 	return func(s *Server) {
 		s.cfg = cfg
+	}
+}
+
+// WithDB injects the database connection
+func WithDB(db *sqlx.DB) Option {
+	return func(s *Server) {
+		s.db = db
 	}
 }
 
@@ -72,7 +100,7 @@ func NewServer(opts ...Option) *Server {
 	docs.RegisterRoutes(app)
 
 	// Init custom routes
-	router.SetupRoutes(app, s.cfg)
+	router.SetupRoutes(app, s.cfg, s.db)
 
 	app.Get("/", func(c *fiber.Ctx) error {
 		logger.Log.Info("Testing API")

@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"context"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/maynguyen24/sever/internal/models"
 	"github.com/maynguyen24/sever/pkg/response"
@@ -8,8 +10,8 @@ import (
 
 // ReportService defines the contract for the handler layer
 type ReportService interface {
-	GetCategorySummary(userID int64, req *models.ReportRequest) ([]*models.CategorySummary, error)
-	GetMonthlyTrend(userID int64, months int) ([]*models.MonthlySummary, error)
+	GetCategorySummary(ctx context.Context, userID int64, req *models.ReportRequest) ([]*models.CategorySummary, error)
+	GetMonthlyTrend(ctx context.Context, userID int64, months int) ([]*models.MonthlySummary, error)
 }
 
 type ReportHandler struct {
@@ -32,7 +34,7 @@ func (h *ReportHandler) GetCategorySummary(c *fiber.Ctx) error {
 		// Ignore error, use default range
 	}
 
-	summary, err := h.service.GetCategorySummary(userID, &req)
+	summary, err := h.service.GetCategorySummary(c.Context(), userID, &req)
 	if err != nil {
 		return err
 	}
@@ -52,7 +54,7 @@ func (h *ReportHandler) GetMonthlyTrend(c *fiber.Ctx) error {
 		// Ignore error, use default count
 	}
 
-	trend, err := h.service.GetMonthlyTrend(userID, req.Months)
+	trend, err := h.service.GetMonthlyTrend(c.Context(), userID, req.Months)
 	if err != nil {
 		return err
 	}

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
@@ -11,11 +12,11 @@ import (
 
 // TransactionService defines the contract for the handler layer
 type TransactionService interface {
-	Create(userID int64, req *models.CreateTransactionRequest) (*models.Transaction, error)
-	GetAll(userID int64, query map[string]string) ([]*models.TransactionDetail, error)
-	GetByID(id, userID int64) (*models.TransactionDetail, error)
-	Update(id, userID int64, req *models.UpdateTransactionRequest) (*models.Transaction, error)
-	Delete(id, userID int64) error
+	Create(ctx context.Context, userID int64, req *models.CreateTransactionRequest) (*models.Transaction, error)
+	GetAll(ctx context.Context, userID int64, query map[string]string) ([]*models.TransactionDetail, error)
+	GetByID(ctx context.Context, id, userID int64) (*models.TransactionDetail, error)
+	Update(ctx context.Context, id, userID int64, req *models.UpdateTransactionRequest) (*models.Transaction, error)
+	Delete(ctx context.Context, id, userID int64) error
 }
 
 type TransactionHandler struct {
@@ -42,7 +43,7 @@ func (h *TransactionHandler) Create(c *fiber.Ctx) error {
 		return err
 	}
 
-	tx, err := h.service.Create(userID, &req)
+	tx, err := h.service.Create(c.Context(), userID, &req)
 	if err != nil {
 		return err
 	}
@@ -72,7 +73,7 @@ func (h *TransactionHandler) GetAll(c *fiber.Ctx) error {
 		"source_id":   body.SourcePaymentID,
 	}
 
-	txs, err := h.service.GetAll(userID, queryParams)
+	txs, err := h.service.GetAll(c.Context(), userID, queryParams)
 	if err != nil {
 		return err
 	}
@@ -92,7 +93,7 @@ func (h *TransactionHandler) GetByID(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid transaction ID")
 	}
 
-	tx, err := h.service.GetByID(id, userID)
+	tx, err := h.service.GetByID(c.Context(), id, userID)
 	if err != nil {
 		return err
 	}
@@ -121,7 +122,7 @@ func (h *TransactionHandler) Update(c *fiber.Ctx) error {
 		return err
 	}
 
-	tx, err := h.service.Update(id, userID, &req)
+	tx, err := h.service.Update(c.Context(), id, userID, &req)
 	if err != nil {
 		return err
 	}
@@ -141,7 +142,7 @@ func (h *TransactionHandler) Delete(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid transaction ID")
 	}
 
-	if err := h.service.Delete(id, userID); err != nil {
+	if err := h.service.Delete(c.Context(), id, userID); err != nil {
 		return err
 	}
 
