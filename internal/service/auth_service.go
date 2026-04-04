@@ -34,7 +34,7 @@ type AuthService struct {
 	googleCfg  *oauth2.Config
 }
 
-func NewAuthService(userRepo UserRepository, tokenRepo TokenRepository, mailer mailer.Mailer, cfg *configs.Config) *AuthService {
+func NewAuthService(userRepo UserRepository, tokenRepo TokenRepository, cfg *configs.Config) *AuthService {
 	googleCfg := &oauth2.Config{
 		ClientID:     cfg.GoogleClientID,
 		ClientSecret: cfg.GoogleClientSecret,
@@ -49,7 +49,6 @@ func NewAuthService(userRepo UserRepository, tokenRepo TokenRepository, mailer m
 	return &AuthService{
 		userRepo:   userRepo,
 		tokenRepo:  tokenRepo,
-		mailer:     mailer,
 		cfg:        cfg,
 		oauthState: "pseudo-random-state", // In production, this should be dynamic and stored in session/cookie
 		googleCfg:  googleCfg,
@@ -174,7 +173,7 @@ func (s *AuthService) Login(ctx context.Context, req *models.LoginRequest) (*mod
 		TokenString: refreshToken,
 		ExpiresAt:   time.Now().Add(30 * 24 * time.Hour),
 	}
-	
+
 	if err := s.tokenRepo.StoreRefreshToken(ctx, tokenRecord); err != nil {
 		return nil, fmt.Errorf("could not save session: %w", err)
 	}

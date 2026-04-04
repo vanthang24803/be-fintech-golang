@@ -9,44 +9,20 @@ import (
 	"github.com/maynguyen24/sever/internal/repository"
 	"github.com/maynguyen24/sever/internal/service"
 	"github.com/maynguyen24/sever/pkg/i18n"
-	"github.com/maynguyen24/sever/pkg/logger"
-	"github.com/maynguyen24/sever/pkg/mailer"
 	"github.com/maynguyen24/sever/pkg/push"
 	"github.com/maynguyen24/sever/pkg/queue"
-	"github.com/maynguyen24/sever/pkg/upload"
 	"github.com/redis/go-redis/v9"
-	"go.uber.org/zap"
-	)
+)
 
-	// SetupRoutes wires up all dependencies and mounts the API endpoints
-	func SetupRoutes(app *fiber.App, cfg *configs.Config, db *sqlx.DB) {
+// SetupRoutes wires up all dependencies and mounts the API endpoints
+func SetupRoutes(app *fiber.App, cfg *configs.Config, db *sqlx.DB) {
 	// 0. Initialize I18n
 	_ = i18n.LoadLocales("locales")
 
 	// 1. Global Middlewares
 	app.Use(middleware.I18nMiddleware())
 
-	// Initialize Mailer
-	var emailer mailer.Mailer
-	if cfg.SMTPUser != "" && cfg.SMTPPass != "" {
-		emailer = mailer.NewSMTPMailer(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUser, cfg.SMTPPass, cfg.SMTPFrom)
-	} else {
-		logger.Log.Warn("SMTP credentials missing, using MockMailer")
-		emailer = mailer.NewMockMailer()
-	}
-
 	// Initialize MinIO Uploader
-
-	uploader, err := upload.NewMinioUploader(
-		cfg.MinioEndpoint,
-		cfg.MinioAccessKey,
-		cfg.MinioSecretKey,
-		cfg.MinioBucketName,
-		cfg.MinioUseSSL,
-	)
-	if err != nil {
-		logger.Log.Error("Failed to initialize MinIO uploader", zap.Error(err))
-	}
 
 	// 2. Repositories
 	userRepo := repository.NewUserRepository(db)
@@ -63,7 +39,7 @@ import (
 
 	// 2. Services
 	userService := service.NewUserService(userRepo)
-	authService := service.NewAuthService(userRepo, tokenRepo, emailer, cfg)
+	authService := service.NewAuthService(userRepo, tokenRepo, cfg)
 	sourceService := service.NewSourcePaymentService(sourceRepo)
 	categoryService := service.NewCategoryService(categoryRepo)
 
@@ -106,7 +82,6 @@ import (
 	reportHandler := handler.NewReportHandler(reportService)
 	goalHandler := handler.NewSavingsGoalHandler(goalService)
 	fidoHandler := handler.NewFIDOHandler(fidoService)
-	uploadHandler := handler.NewUploadHandler(uploader)
 
 	// 4. API Routes Group
 	api := app.Group("/api/v1")
@@ -128,9 +103,6 @@ import (
 
 	// Protected Routes (require valid JWT)
 	protected := api.Group("/", middleware.AuthRequired(cfg))
-
-	// Upload — POST
-	protected.Post("/upload", uploadHandler.Upload)
 
 	// Profile (Update requires FIDO)
 	protected.Post("/profile/me", userHandler.GetProfile)
