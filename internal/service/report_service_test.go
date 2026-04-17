@@ -41,9 +41,12 @@ func TestReportService_GetCategorySummary_DefaultsCurrentMonthAndComputesPercent
 	}
 	svc := NewReportService(repo)
 
-	before := time.Now()
+	fixedNow := time.Date(2026, 4, 18, 10, 30, 0, 0, time.UTC)
+	prev := reportNow
+	reportNow = func() time.Time { return fixedNow }
+	defer func() { reportNow = prev }()
+
 	resp, err := svc.GetCategorySummary(context.Background(), 42, &models.ReportRequest{})
-	after := time.Now()
 	if err != nil {
 		t.Fatalf("GetCategorySummary() error = %v", err)
 	}
@@ -58,11 +61,11 @@ func TestReportService_GetCategorySummary_DefaultsCurrentMonthAndComputesPercent
 	if got := repo.categorySummaryStart.Day(); got != 1 {
 		t.Fatalf("expected default start date to be first day of month, got day %d", got)
 	}
-	if repo.categorySummaryStart.Year() != before.Year() || repo.categorySummaryStart.Month() != before.Month() {
-		t.Fatalf("expected default start month to match current month, got %s", repo.categorySummaryStart.Format("2006-01-02"))
+	if !repo.categorySummaryStart.Equal(time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)) {
+		t.Fatalf("expected default start date to be 2026-04-01, got %s", repo.categorySummaryStart.Format(time.RFC3339Nano))
 	}
-	if repo.categorySummaryEnd.Before(before) || repo.categorySummaryEnd.After(after) {
-		t.Fatalf("expected default end date to be current time window, got %s", repo.categorySummaryEnd.Format(time.RFC3339Nano))
+	if !repo.categorySummaryEnd.Equal(fixedNow) {
+		t.Fatalf("expected default end date to match fixed clock, got %s", repo.categorySummaryEnd.Format(time.RFC3339Nano))
 	}
 	if got, want := resp[0].Percentage, 25.0; got != want {
 		t.Fatalf("expected first percentage %v, got %v", want, got)
@@ -81,9 +84,12 @@ func TestReportService_GetMonthlyTrend_DefaultsMonthsAndComputesNetProfit(t *tes
 	}
 	svc := NewReportService(repo)
 
-	before := time.Now()
+	fixedNow := time.Date(2026, 4, 18, 10, 30, 0, 0, time.UTC)
+	prev := reportNow
+	reportNow = func() time.Time { return fixedNow }
+	defer func() { reportNow = prev }()
+
 	resp, err := svc.GetMonthlyTrend(context.Background(), 42, 0)
-	after := time.Now()
 	if err != nil {
 		t.Fatalf("GetMonthlyTrend() error = %v", err)
 	}
@@ -91,8 +97,8 @@ func TestReportService_GetMonthlyTrend_DefaultsMonthsAndComputesNetProfit(t *tes
 	if got, want := len(resp), 2; got != want {
 		t.Fatalf("expected %d monthly items, got %d", want, got)
 	}
-	if repo.monthlyTrendSince.Before(before.AddDate(0, -6, 0)) || repo.monthlyTrendSince.After(after.AddDate(0, -6, 0)) {
-		t.Fatalf("expected default since to be about 6 months ago, got %s", repo.monthlyTrendSince.Format(time.RFC3339Nano))
+	if !repo.monthlyTrendSince.Equal(time.Date(2025, 10, 18, 10, 30, 0, 0, time.UTC)) {
+		t.Fatalf("expected default since to be 2025-10-18T10:30:00Z, got %s", repo.monthlyTrendSince.Format(time.RFC3339Nano))
 	}
 	if got, want := resp[0].NetProfit, 375.0; got != want {
 		t.Fatalf("expected first net profit %v, got %v", want, got)
