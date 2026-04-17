@@ -169,6 +169,8 @@ func SetupRoutes(app *fiber.App, cfg *configs.Config, db *sqlx.DB) {
 	reports := protected.Group("/reports")
 	reports.Post("/category-summary", reportHandler.GetCategorySummary)
 	reports.Post("/monthly-trend", reportHandler.GetMonthlyTrend)
+	reports.Post("/income-category-breakdown", reportHandler.GetIncomeCategoryBreakdown)
+	reports.Post("/category-trend", reportHandler.GetCategoryTrend)
 
 	// Savings Goal — all POST
 	goals := protected.Group("/goals")

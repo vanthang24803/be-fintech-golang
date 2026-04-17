@@ -12,6 +12,8 @@ import (
 type ReportService interface {
 	GetCategorySummary(ctx context.Context, userID int64, req *models.ReportRequest) ([]*models.CategorySummary, error)
 	GetMonthlyTrend(ctx context.Context, userID int64, months int) ([]*models.MonthlySummary, error)
+	GetIncomeCategoryBreakdown(ctx context.Context, userID int64, req *models.IncomeCategoryBreakdownRequest) (*models.IncomeCategoryBreakdownResponse, error)
+	GetCategoryTrend(ctx context.Context, userID int64, req *models.CategoryTrendRequest) (*models.CategoryTrendResponse, error)
 }
 
 type ReportHandler struct {
@@ -60,4 +62,44 @@ func (h *ReportHandler) GetMonthlyTrend(c *fiber.Ctx) error {
 	}
 
 	return response.Success(c, 2000, "Monthly trend fetched successfully", trend)
+}
+
+// POST /api/v1/reports/income-category-breakdown
+func (h *ReportHandler) GetIncomeCategoryBreakdown(c *fiber.Ctx) error {
+	userID, err := extractUserID(c)
+	if err != nil {
+		return err
+	}
+
+	var req models.IncomeCategoryBreakdownRequest
+	if err := c.BodyParser(&req); err != nil {
+		// Ignore error, use default range
+	}
+
+	result, err := h.service.GetIncomeCategoryBreakdown(c.Context(), userID, &req)
+	if err != nil {
+		return err
+	}
+
+	return response.Success(c, 2000, "Income category breakdown fetched successfully", result)
+}
+
+// POST /api/v1/reports/category-trend
+func (h *ReportHandler) GetCategoryTrend(c *fiber.Ctx) error {
+	userID, err := extractUserID(c)
+	if err != nil {
+		return err
+	}
+
+	var req models.CategoryTrendRequest
+	if err := c.BodyParser(&req); err != nil {
+		// Ignore error, use default range
+	}
+
+	result, err := h.service.GetCategoryTrend(c.Context(), userID, &req)
+	if err != nil {
+		return err
+	}
+
+	return response.Success(c, 2000, "Category trend fetched successfully", result)
 }
