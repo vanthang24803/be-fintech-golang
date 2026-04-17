@@ -43,3 +43,5 @@ tmp_server
 ehthumbs.db
 Thumbs.db
 docs/superpowers
+.omx
+.worktrees
