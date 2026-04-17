@@ -158,13 +158,19 @@ func TestFundService_Transactions(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name      string
-		method    func(*FundService) error
-		wantErr   error
-		expectRun bool
+		name    string
+		setup   func(*stubFundRepo)
+		method  func(*FundService) error
+		wantErr error
 	}{
 		{
 			name: "deposit invalid amount",
+			setup: func(repo *stubFundRepo) {
+				repo.depositFn = func(context.Context, int64, int64, float64) (*models.Fund, error) {
+					t.Fatal("repo transaction should not be called for invalid amount")
+					return nil, nil
+				}
+			},
 			method: func(svc *FundService) error {
 				_, err := svc.Deposit(context.Background(), 1, 2, &models.FundTransactionRequest{Amount: 0})
 				return err
@@ -173,6 +179,11 @@ func TestFundService_Transactions(t *testing.T) {
 		},
 		{
 			name: "deposit not found",
+			setup: func(repo *stubFundRepo) {
+				repo.depositFn = func(context.Context, int64, int64, float64) (*models.Fund, error) {
+					return nil, apperr.ErrNotFound
+				}
+			},
 			method: func(svc *FundService) error {
 				_, err := svc.Deposit(context.Background(), 1, 2, &models.FundTransactionRequest{Amount: 10})
 				return err
@@ -181,6 +192,12 @@ func TestFundService_Transactions(t *testing.T) {
 		},
 		{
 			name: "withdraw invalid amount",
+			setup: func(repo *stubFundRepo) {
+				repo.withdrawFn = func(context.Context, int64, int64, float64) (*models.Fund, error) {
+					t.Fatal("repo transaction should not be called for invalid amount")
+					return nil, nil
+				}
+			},
 			method: func(svc *FundService) error {
 				_, err := svc.Withdraw(context.Background(), 1, 2, &models.FundTransactionRequest{Amount: -5})
 				return err
@@ -189,6 +206,11 @@ func TestFundService_Transactions(t *testing.T) {
 		},
 		{
 			name: "withdraw not found",
+			setup: func(repo *stubFundRepo) {
+				repo.withdrawFn = func(context.Context, int64, int64, float64) (*models.Fund, error) {
+					return nil, apperr.ErrNotFound
+				}
+			},
 			method: func(svc *FundService) error {
 				_, err := svc.Withdraw(context.Background(), 1, 2, &models.FundTransactionRequest{Amount: 10})
 				return err
@@ -197,6 +219,11 @@ func TestFundService_Transactions(t *testing.T) {
 		},
 		{
 			name: "withdraw insufficient balance",
+			setup: func(repo *stubFundRepo) {
+				repo.withdrawFn = func(context.Context, int64, int64, float64) (*models.Fund, error) {
+					return nil, apperr.ErrInsufficientBalance
+				}
+			},
 			method: func(svc *FundService) error {
 				_, err := svc.Withdraw(context.Background(), 1, 2, &models.FundTransactionRequest{Amount: 10})
 				return err
@@ -211,29 +238,7 @@ func TestFundService_Transactions(t *testing.T) {
 			t.Parallel()
 
 			repo := &stubFundRepo{}
-			switch tt.name {
-			case "deposit invalid amount", "withdraw invalid amount":
-				repo.depositFn = func(context.Context, int64, int64, float64) (*models.Fund, error) {
-					t.Fatal("repo transaction should not be called for invalid amount")
-					return nil, nil
-				}
-				repo.withdrawFn = func(context.Context, int64, int64, float64) (*models.Fund, error) {
-					t.Fatal("repo transaction should not be called for invalid amount")
-					return nil, nil
-				}
-			case "deposit not found":
-				repo.depositFn = func(context.Context, int64, int64, float64) (*models.Fund, error) {
-					return nil, apperr.ErrNotFound
-				}
-			case "withdraw not found":
-				repo.withdrawFn = func(context.Context, int64, int64, float64) (*models.Fund, error) {
-					return nil, apperr.ErrNotFound
-				}
-			case "withdraw insufficient balance":
-				repo.withdrawFn = func(context.Context, int64, int64, float64) (*models.Fund, error) {
-					return nil, apperr.ErrInsufficientBalance
-				}
-			}
+			tt.setup(repo)
 
 			svc := NewFundService(repo)
 			err := tt.method(svc)

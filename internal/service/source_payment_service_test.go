@@ -95,7 +95,7 @@ func TestSourcePaymentService_GetByID_NotFound(t *testing.T) {
 	}
 }
 
-func TestSourcePaymentService_Update_And_Delete(t *testing.T) {
+func TestSourcePaymentService_Update_Success(t *testing.T) {
 	t.Parallel()
 
 	repo := &stubSourcePaymentRepo{}
@@ -107,11 +107,6 @@ func TestSourcePaymentService_Update_And_Delete(t *testing.T) {
 		if source.Name != "Bank" || source.Type != "bank" || source.Currency != "USD" {
 			t.Fatalf("unexpected source passed to update: %+v", source)
 		}
-		return nil
-	}
-	deleted := false
-	repo.deleteFn = func(context.Context, int64, int64) error {
-		deleted = true
 		return nil
 	}
 
@@ -128,6 +123,36 @@ func TestSourcePaymentService_Update_And_Delete(t *testing.T) {
 	if source.Name != "Bank" || source.Currency != "USD" {
 		t.Fatalf("unexpected source returned: %+v", source)
 	}
+}
+
+func TestSourcePaymentService_Update_NotFound(t *testing.T) {
+	t.Parallel()
+
+	svc := NewSourcePaymentService(&stubSourcePaymentRepo{
+		getByIDFn: func(context.Context, int64, int64) (*models.SourcePayment, error) {
+			return nil, nil
+		},
+	})
+
+	_, err := svc.Update(context.Background(), 1, 2, &models.UpdateSourcePaymentRequest{Name: "Bank", Type: "bank"})
+	if !errors.Is(err, apperr.ErrNotFound) {
+		t.Fatalf("expected not found, got %v", err)
+	}
+}
+
+func TestSourcePaymentService_Delete_Success(t *testing.T) {
+	t.Parallel()
+
+	deleted := false
+	svc := NewSourcePaymentService(&stubSourcePaymentRepo{
+		getByIDFn: func(context.Context, int64, int64) (*models.SourcePayment, error) {
+			return &models.SourcePayment{ID: 1, UserID: 2, Name: "Cash", Type: "wallet", Currency: "VND"}, nil
+		},
+		deleteFn: func(context.Context, int64, int64) error {
+			deleted = true
+			return nil
+		},
+	})
 
 	if err := svc.Delete(context.Background(), 1, 2); err != nil {
 		t.Fatalf("Delete returned error: %v", err)
@@ -135,15 +160,18 @@ func TestSourcePaymentService_Update_And_Delete(t *testing.T) {
 	if !deleted {
 		t.Fatal("repo.Delete was not called")
 	}
+}
 
-	repo.getByIDFn = func(context.Context, int64, int64) (*models.SourcePayment, error) {
-		return nil, nil
-	}
-	_, err = svc.Update(context.Background(), 1, 2, &models.UpdateSourcePaymentRequest{Name: "Bank", Type: "bank"})
-	if !errors.Is(err, apperr.ErrNotFound) {
-		t.Fatalf("expected not found, got %v", err)
-	}
-	err = svc.Delete(context.Background(), 1, 2)
+func TestSourcePaymentService_Delete_NotFound(t *testing.T) {
+	t.Parallel()
+
+	svc := NewSourcePaymentService(&stubSourcePaymentRepo{
+		getByIDFn: func(context.Context, int64, int64) (*models.SourcePayment, error) {
+			return nil, nil
+		},
+	})
+
+	err := svc.Delete(context.Background(), 1, 2)
 	if !errors.Is(err, apperr.ErrNotFound) {
 		t.Fatalf("expected not found, got %v", err)
 	}
