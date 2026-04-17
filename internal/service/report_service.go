@@ -21,6 +21,8 @@ type ReportService struct {
 	repo ReportRepository
 }
 
+var reportNow = time.Now
+
 func NewReportService(repo ReportRepository) *ReportService {
 	return &ReportService{repo: repo}
 }
@@ -29,7 +31,7 @@ func NewReportService(repo ReportRepository) *ReportService {
 func (s *ReportService) GetCategorySummary(ctx context.Context, userID int64, req *models.ReportRequest) ([]*models.CategorySummary, error) {
 	// Default to current month if not provided
 	if req.StartDate.IsZero() {
-		now := time.Now()
+		now := reportNow()
 		req.StartDate = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 		req.EndDate = now
 	}
@@ -60,7 +62,7 @@ func (s *ReportService) GetMonthlyTrend(ctx context.Context, userID int64, month
 		months = 6 // Default to 6 months
 	}
 
-	since := time.Now().AddDate(0, -months, 0)
+	since := reportNow().AddDate(0, -months, 0)
 	trend, err := s.repo.GetMonthlyTrend(ctx, userID, since)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch monthly trend: %w", err)
