@@ -27,7 +27,7 @@ func NewDeviceService(repo DeviceRepository) *DeviceService {
 	return &DeviceService{repo: repo}
 }
 
-// Register adds a new device for the user. 
+// Register adds a new device for the user.
 // Enforces one-device-one-account: a device fingerprint can only be associated with one user.
 func (s *DeviceService) Register(ctx context.Context, userID int64, req *models.RegisterDeviceRequest) (*models.Device, error) {
 	existing, err := s.repo.GetByFingerprint(ctx, req.DeviceFingerprint)
@@ -53,6 +53,7 @@ func (s *DeviceService) Register(ctx context.Context, userID int64, req *models.
 		DeviceName:        req.DeviceName,
 		Platform:          req.Platform,
 		PushToken:         req.PushToken,
+		IsTrusted:         true,
 		IsActive:          true,
 	}
 
