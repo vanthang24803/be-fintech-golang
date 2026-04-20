@@ -10,18 +10,22 @@ import (
 )
 
 type stubCategoryRepo struct {
-	createFn       func(context.Context, *models.Category) error
-	getByIDFn      func(context.Context, int64, int64) (*models.Category, error)
-	getOwnedByIDFn func(context.Context, int64, int64) (*models.Category, error)
-	updateFn       func(context.Context, *models.Category) error
-	deleteFn       func(context.Context, int64, int64) error
+	createFn        func(context.Context, *models.Category) error
+	getAllByUserIDFn func(context.Context, int64) ([]*models.Category, error)
+	getByIDFn       func(context.Context, int64, int64) (*models.Category, error)
+	getOwnedByIDFn  func(context.Context, int64, int64) (*models.Category, error)
+	updateFn        func(context.Context, *models.Category) error
+	deleteFn        func(context.Context, int64, int64) error
 }
 
 func (s *stubCategoryRepo) Create(ctx context.Context, cat *models.Category) error {
 	return s.createFn(ctx, cat)
 }
 
-func (s *stubCategoryRepo) GetAllByUserID(context.Context, int64) ([]*models.Category, error) {
+func (s *stubCategoryRepo) GetAllByUserID(ctx context.Context, userID int64) ([]*models.Category, error) {
+	if s.getAllByUserIDFn != nil {
+		return s.getAllByUserIDFn(ctx, userID)
+	}
 	return nil, nil
 }
 
