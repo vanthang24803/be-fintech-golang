@@ -48,5 +48,27 @@ jobs:
           push: false
           load: false
           tags: be-fintech-golang:ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=backend-docker
+          cache-to: type=gha,mode=max,scope=backend-docker
+
+  frontend-docker-build:
+    name: Frontend Docker Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build frontend Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: false
+          load: false
+          tags: expense-manager-frontend:ci
+          cache-from: type=gha,scope=frontend-docker
+          cache-to: type=gha,mode=max,scope=frontend-docker
