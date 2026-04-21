@@ -56,6 +56,24 @@ func TestReportRepository_Queries(t *testing.T) {
 
 	mock.ExpectQuery(quotedSQL(`
 		SELECT
+			TO_CHAR(transaction_date, 'YYYY-MM-DD') as date,
+			SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as income,
+			SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as expense
+		FROM transactions
+		WHERE user_id = $1 AND transaction_date >= $2
+		GROUP BY date
+		ORDER BY date ASC
+	`)).
+		WithArgs(int64(42), start).
+		WillReturnRows(sqlmock.NewRows([]string{"date", "income", "expense"}).
+			AddRow("2026-04-10", 500.0, 120.0))
+	dailyTrend, err := repo.GetDailyTrend(context.Background(), 42, start)
+	if err != nil || len(dailyTrend) != 1 || dailyTrend[0].Income != 500 || dailyTrend[0].Expense != 120 {
+		t.Fatalf("GetDailyTrend() = %+v, %v", dailyTrend, err)
+	}
+
+	mock.ExpectQuery(quotedSQL(`
+		SELECT
 			COALESCE(c.id, 0) as category_id,
 			COALESCE(c.name, 'Uncategorized') as category_name,
 			SUM(t.amount) as amount

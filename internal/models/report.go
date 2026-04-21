@@ -70,3 +70,13 @@ type CategoryTrendResponse struct {
 	Granularity  string                `json:"granularity"`
 	Points       []*CategoryTrendPoint `json:"points"`
 }
+
+type DailyTrendRequest struct {
+	Days int `json:"days" validate:"omitempty,min=1,max=90"`
+}
+
+type DailySummary struct {
+	Date    string  `json:"date" db:"date"` // Format: YYYY-MM-DD
+	Income  float64 `json:"income" db:"income"`
+	Expense float64 `json:"expense" db:"expense"`
+}

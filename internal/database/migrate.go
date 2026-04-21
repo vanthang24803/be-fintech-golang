@@ -3,6 +3,7 @@ package database
 import (
 	"embed"
 	"fmt"
+	"strings"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
@@ -24,8 +25,23 @@ func RunDBMigration(dsn string) error {
 		return fmt.Errorf("failed to initialize migrate instance: %w", err)
 	}
 
-	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
-		return fmt.Errorf("failed to run migrate up: %w", err)
+	if err := m.Up(); err != nil {
+		if strings.HasPrefix(err.Error(), "Dirty database") {
+			// If dirty, try to force to the current version to clear the flag
+			version, _, _ := m.Version()
+			if version > 0 {
+				fmt.Printf("Database is dirty at version %d, forcing to clean state...\n", version)
+				if err := m.Force(int(version)); err != nil {
+					return fmt.Errorf("failed to force version: %w", err)
+				}
+				// Retry Up after forcing
+				if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+					return fmt.Errorf("failed to run migrate up after force: %w", err)
+				}
+			}
+		} else if err != migrate.ErrNoChange {
+			return fmt.Errorf("failed to run migrate up: %w", err)
+		}
 	}
 
 	return nil

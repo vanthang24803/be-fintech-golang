@@ -17,7 +17,7 @@ func testRouterConfig() *configs.Config {
 		GoogleRedirectURL:       "http://localhost/callback",
 		WebAuthnRPID:            "localhost",
 		WebAuthnRPName:          "Test",
-		WebAuthnOrigin:          "http://localhost:3000",
+		WebAuthnOrigin:          "http://localhost:8000",
 		RedisAddr:               "127.0.0.1:0",
 		RedisPassword:           "",
 		FirebaseCredentialsPath: "",
@@ -42,6 +42,7 @@ func TestSetupRoutesRegistersPublicAndProtectedEndpoints(t *testing.T) {
 		{name: "google url route registered", method: fiber.MethodPost, target: "/api/v1/auth/google/url", wantStatus: fiber.StatusOK},
 		{name: "protected funds route registered", method: fiber.MethodPost, target: "/api/v1/funds/list", wantStatus: fiber.StatusUnauthorized},
 		{name: "protected goals route registered", method: fiber.MethodPost, target: "/api/v1/goals/list", wantStatus: fiber.StatusUnauthorized},
+		{name: "protected daily trend route registered", method: fiber.MethodPost, target: "/api/v1/reports/daily-trend", wantStatus: fiber.StatusUnauthorized},
 	}
 
 	for _, tt := range tests {

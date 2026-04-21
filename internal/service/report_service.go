@@ -14,6 +14,7 @@ type ReportRepository interface {
 	GetCategorySummary(ctx context.Context, userID int64, start, end time.Time) ([]*models.CategorySummary, error)
 	GetMonthlyTrend(ctx context.Context, userID int64, since time.Time) ([]*models.MonthlySummary, error)
 	GetIncomeCategoryBreakdown(ctx context.Context, userID int64, start, end time.Time, limit int) ([]*models.IncomeCategoryBreakdownItem, error)
+	GetDailyTrend(ctx context.Context, userID int64, since time.Time) ([]*models.DailySummary, error)
 	GetCategoryTrend(ctx context.Context, userID, categoryID int64, start, end time.Time, granularity string) ([]*models.CategoryTrendPoint, error)
 }
 
@@ -106,6 +107,18 @@ func (s *ReportService) GetIncomeCategoryBreakdown(ctx context.Context, userID i
 	}
 
 	return resp, nil
+}
+
+func (s *ReportService) GetDailyTrend(ctx context.Context, userID int64, days int) ([]*models.DailySummary, error) {
+	if days <= 0 {
+		days = 7
+	}
+	since := reportNow().AddDate(0, 0, -days)
+	trend, err := s.repo.GetDailyTrend(ctx, userID, since)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch daily trend: %w", err)
+	}
+	return trend, nil
 }
 
 func (s *ReportService) GetCategoryTrend(ctx context.Context, userID int64, req *models.CategoryTrendRequest) (*models.CategoryTrendResponse, error) {

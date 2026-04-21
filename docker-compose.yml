@@ -17,7 +17,7 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-localhost}
       WEBAUTHN_RP_NAME: ${WEBAUTHN_RP_NAME:-Expense Manager}
-      WEBAUTHN_ORIGIN: ${WEBAUTHN_ORIGIN:-http://localhost:8386}
+      WEBAUTHN_ORIGIN: ${WEBAUTHN_ORIGIN:-http://localhost:8000}
     ports:
       - "${PORT:-8386}:8386"
     depends_on:

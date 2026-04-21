@@ -17,9 +17,11 @@ import (
 type stubReportService struct {
 	breakdownReq *models.IncomeCategoryBreakdownRequest
 	trendReq     *models.CategoryTrendRequest
+	dailyDays    int
 
 	breakdownResp *models.IncomeCategoryBreakdownResponse
 	trendResp     *models.CategoryTrendResponse
+	dailyResp     []*models.DailySummary
 }
 
 func (s *stubReportService) GetCategorySummary(ctx context.Context, userID int64, req *models.ReportRequest) ([]*models.CategorySummary, error) {
@@ -28,6 +30,11 @@ func (s *stubReportService) GetCategorySummary(ctx context.Context, userID int64
 
 func (s *stubReportService) GetMonthlyTrend(ctx context.Context, userID int64, months int) ([]*models.MonthlySummary, error) {
 	return nil, nil
+}
+
+func (s *stubReportService) GetDailyTrend(ctx context.Context, userID int64, days int) ([]*models.DailySummary, error) {
+	s.dailyDays = days
+	return s.dailyResp, nil
 }
 
 func (s *stubReportService) GetIncomeCategoryBreakdown(ctx context.Context, userID int64, req *models.IncomeCategoryBreakdownRequest) (*models.IncomeCategoryBreakdownResponse, error) {
@@ -113,6 +120,59 @@ func TestReportHandler_GetCategoryTrend_EmptyBodyUsesDefaults(t *testing.T) {
 	}
 	if svc.trendReq.CategoryID != 12 {
 		t.Fatalf("expected category ID 12, got %d", svc.trendReq.CategoryID)
+	}
+}
+
+func TestReportHandler_GetDailyTrend(t *testing.T) {
+	svc := &stubReportService{
+		dailyResp: []*models.DailySummary{
+			{Date: "2026-04-18", Income: 200, Expense: 50},
+		},
+	}
+	h := NewReportHandler(svc)
+	app := fiber.New()
+	app.Post("/reports/daily-trend", func(c *fiber.Ctx) error {
+		c.Locals("user_id", int64(88))
+		return h.GetDailyTrend(c)
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/reports/daily-trend", strings.NewReader(`{"days":14}`))
+	req.Header.Set("Content-Type", "application/json")
+	res, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test() error = %v", err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", res.StatusCode)
+	}
+	if svc.dailyDays != 14 {
+		t.Fatalf("expected days 14, got %d", svc.dailyDays)
+	}
+
+	var payload respkg.Response
+	if err := json.NewDecoder(res.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload.Code != 2000 {
+		t.Fatalf("expected code 2000, got %d", payload.Code)
+	}
+}
+
+func TestReportHandler_GetDailyTrend_RequiresUser(t *testing.T) {
+	h := NewReportHandler(&stubReportService{})
+	app := fiber.New()
+	app.Post("/reports/daily-trend", h.GetDailyTrend)
+
+	req := httptest.NewRequest(http.MethodPost, "/reports/daily-trend", strings.NewReader(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	res, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test() error = %v", err)
+	}
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected status 401, got %d", res.StatusCode)
 	}
 }
 

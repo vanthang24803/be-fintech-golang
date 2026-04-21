@@ -1,26 +1,26 @@
 -- Migration 006: Create notifications table
 -- Supports: multi-source notifications (transaction, fund, auth, system, etc.)
---
--- Design decisions:
---   • source + source_id allow any future module to emit notifications without
---     schema changes — just add a new source value.
---   • Partial index on (user_id, is_read=false) makes "unread count" queries fast.
---   • metadata JSONB stores source-specific extra data (e.g. fund name, amount)
---     without requiring new columns per feature.
 
-CREATE TYPE notification_source AS ENUM (
-    'transaction',  -- triggered by income/expense transactions
-    'fund',         -- fund deposit/withdraw/goal-reached events
-    'auth',         -- login from new device, password change, etc.
-    'system'        -- announcements, maintenance, feature updates
-);
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'notification_source') THEN
+        CREATE TYPE notification_source AS ENUM (
+            'transaction',
+            'fund',
+            'auth',
+            'system'
+        );
+    END IF;
 
-CREATE TYPE notification_type AS ENUM (
-    'info',         -- general informational message
-    'success',      -- positive outcome (e.g. goal reached)
-    'warning',      -- needs user attention but not critical
-    'alert'         -- critical / urgent (e.g. suspicious login)
-);
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'notification_type') THEN
+        CREATE TYPE notification_type AS ENUM (
+            'info',
+            'success',
+            'warning',
+            'alert'
+        );
+    END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS notifications (
     id          BIGINT                  PRIMARY KEY,

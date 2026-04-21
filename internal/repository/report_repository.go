@@ -82,6 +82,25 @@ func (r *ReportRepository) GetIncomeCategoryBreakdown(ctx context.Context, userI
 	return summary, nil
 }
 
+// GetDailyTrend aggregates income and expense totals grouped by day
+func (r *ReportRepository) GetDailyTrend(ctx context.Context, userID int64, since time.Time) ([]*models.DailySummary, error) {
+	var trend []*models.DailySummary
+	query := `
+		SELECT
+			TO_CHAR(transaction_date, 'YYYY-MM-DD') as date,
+			SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as income,
+			SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as expense
+		FROM transactions
+		WHERE user_id = $1 AND transaction_date >= $2
+		GROUP BY date
+		ORDER BY date ASC
+	`
+	if err := r.db.SelectContext(ctx, &trend, query, userID, since); err != nil {
+		return nil, err
+	}
+	return trend, nil
+}
+
 // GetCategoryTrend aggregates income totals grouped by day for a category
 func (r *ReportRepository) GetCategoryTrend(ctx context.Context, userID, categoryID int64, start, end time.Time, granularity string) ([]*models.CategoryTrendPoint, error) {
 	var points []*models.CategoryTrendPoint

@@ -1,6 +1,6 @@
 -- 007_create_budgets.sql
 
-CREATE TABLE budgets (
+CREATE TABLE IF NOT EXISTS budgets (
     id BIGINT PRIMARY KEY,
     user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     category_id BIGINT REFERENCES categories(id) ON DELETE SET NULL, -- NULL = Total budget
@@ -17,4 +17,4 @@ CREATE TABLE budgets (
 );
 
 -- Index for fast lookup of active budgets for a user
-CREATE INDEX idx_budgets_user_active_lookup ON budgets(user_id, is_active, start_date, end_date);
+CREATE INDEX IF NOT EXISTS idx_budgets_user_active_lookup ON budgets(user_id, is_active, start_date, end_date);

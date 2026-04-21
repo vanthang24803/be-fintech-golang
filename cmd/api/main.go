@@ -35,6 +35,12 @@ func main() {
 	log.Println("Database connected successfully!")
 	defer database.Close()
 
+	// 4. Run Database Migrations
+	if err := database.RunDBMigration(cfg.DatabaseURL); err != nil {
+		log.Fatalf("Could not run database migrations: %v", err)
+	}
+	log.Println("Database migrations applied successfully!")
+
 	// Initialize the server and all routes using Functional Options pattern
 	srv := server.NewServer(
 		server.WithPort(cfg.Port),

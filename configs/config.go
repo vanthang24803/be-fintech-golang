@@ -46,7 +46,7 @@ func LoadConfig() *Config {
 		RedisPassword:           getEnv("REDIS_PASSWORD", ""),
 		WebAuthnRPID:            getEnv("WEBAUTHN_RP_ID", "localhost"),
 		WebAuthnRPName:          getEnv("WEBAUTHN_RP_NAME", "Expense Manager"),
-		WebAuthnOrigin:          getEnv("WEBAUTHN_ORIGIN", "http://localhost:8386"),
+		WebAuthnOrigin:          getEnv("WEBAUTHN_ORIGIN", "http://localhost:8000"),
 		MinioEndpoint:           getEnv("MINIO_ENDPOINT", "localhost:9000"),
 		MinioAccessKey:          getEnv("MINIO_ACCESS_KEY", "minioadmin"),
 		MinioSecretKey:          getEnv("MINIO_SECRET_KEY", "minioadmin"),

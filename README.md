@@ -38,6 +38,7 @@ internal/router/         Route registration
 internal/server/         Fiber server bootstrap
 internal/service/        Business logic
 internal/worker/         Background worker handlers
+frontend/                Next.js web app powered by Bun
 pkg/                     Shared packages
 docs/                    Project documentation
 ```
@@ -103,6 +104,37 @@ Notes:
 - Database migrations run automatically during startup from `internal/database/migrations/`.
 - The server listens on `PORT`, which defaults to `8386`.
 - If Firebase credentials are missing, the app falls back to a mock push client.
+
+## Frontend Web App
+
+The repository now includes a standalone Next.js frontend in [frontend](/home/thang-nv/Workspace/GO-Proj/frontend).
+
+Install dependencies:
+
+```bash
+cd frontend
+bun install
+```
+
+Create local frontend env:
+
+```bash
+cp .env.example .env.local
+```
+
+Run the frontend:
+
+```bash
+bun run dev
+```
+
+Notes:
+
+- The frontend defaults `NEXT_PUBLIC_API_BASE_URL` to `http://localhost:8386`.
+- Keep the Go API running locally if you want the web app to reach backend routes.
+- The default Next.js dev server port is now `8000` (configured in `package.json`).
+- The main app shell now lives at `http://localhost:8000/dashboard`.
+- The frontend uses a shadcn-style component foundation on top of Tailwind CSS.
 
 ## Docker Deployment
 

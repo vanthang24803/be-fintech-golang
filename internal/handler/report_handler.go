@@ -13,6 +13,7 @@ type ReportService interface {
 	GetCategorySummary(ctx context.Context, userID int64, req *models.ReportRequest) ([]*models.CategorySummary, error)
 	GetMonthlyTrend(ctx context.Context, userID int64, months int) ([]*models.MonthlySummary, error)
 	GetIncomeCategoryBreakdown(ctx context.Context, userID int64, req *models.IncomeCategoryBreakdownRequest) (*models.IncomeCategoryBreakdownResponse, error)
+	GetDailyTrend(ctx context.Context, userID int64, days int) ([]*models.DailySummary, error)
 	GetCategoryTrend(ctx context.Context, userID int64, req *models.CategoryTrendRequest) (*models.CategoryTrendResponse, error)
 }
 
@@ -82,6 +83,26 @@ func (h *ReportHandler) GetIncomeCategoryBreakdown(c *fiber.Ctx) error {
 	}
 
 	return response.Success(c, 2000, "Income category breakdown fetched successfully", result)
+}
+
+// POST /api/v1/reports/daily-trend
+func (h *ReportHandler) GetDailyTrend(c *fiber.Ctx) error {
+	userID, err := extractUserID(c)
+	if err != nil {
+		return err
+	}
+
+	var req models.DailyTrendRequest
+	if err := c.BodyParser(&req); err != nil {
+		// Ignore error, use default
+	}
+
+	trend, err := h.service.GetDailyTrend(c.Context(), userID, req.Days)
+	if err != nil {
+		return err
+	}
+
+	return response.Success(c, 2000, "Daily trend fetched successfully", trend)
 }
 
 // POST /api/v1/reports/category-trend

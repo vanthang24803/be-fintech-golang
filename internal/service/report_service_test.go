@@ -20,6 +20,10 @@ type stubReportRepository struct {
 	monthlyTrendErr   error
 	monthlyTrendResp  []*models.MonthlySummary
 
+	dailyTrendSince time.Time
+	dailyTrendErr   error
+	dailyTrendResp  []*models.DailySummary
+
 	breakdownStart time.Time
 	breakdownEnd   time.Time
 	breakdownResp  []*models.IncomeCategoryBreakdownItem
@@ -40,6 +44,11 @@ func (s *stubReportRepository) GetCategorySummary(ctx context.Context, userID in
 func (s *stubReportRepository) GetMonthlyTrend(ctx context.Context, userID int64, since time.Time) ([]*models.MonthlySummary, error) {
 	s.monthlyTrendSince = since
 	return s.monthlyTrendResp, s.monthlyTrendErr
+}
+
+func (s *stubReportRepository) GetDailyTrend(ctx context.Context, userID int64, since time.Time) ([]*models.DailySummary, error) {
+	s.dailyTrendSince = since
+	return s.dailyTrendResp, s.dailyTrendErr
 }
 
 func (s *stubReportRepository) GetIncomeCategoryBreakdown(ctx context.Context, userID int64, start, end time.Time, limit int) ([]*models.IncomeCategoryBreakdownItem, error) {
@@ -131,12 +140,40 @@ func TestReportService_GetMonthlyTrend_DefaultsMonthsAndComputesNetProfit(t *tes
 	}
 }
 
+func TestReportService_GetDailyTrend_DefaultsDays(t *testing.T) {
+	repo := &stubReportRepository{
+		dailyTrendResp: []*models.DailySummary{
+			{Date: "2026-04-17", Income: 500, Expense: 150},
+		},
+	}
+	svc := NewReportService(repo)
+
+	fixedNow := time.Date(2026, 4, 18, 10, 30, 0, 0, time.UTC)
+	prev := reportNow
+	reportNow = func() time.Time { return fixedNow }
+	defer func() { reportNow = prev }()
+
+	resp, err := svc.GetDailyTrend(context.Background(), 42, 0)
+	if err != nil {
+		t.Fatalf("GetDailyTrend() error = %v", err)
+	}
+
+	if got, want := len(resp), 1; got != want {
+		t.Fatalf("expected %d daily items, got %d", want, got)
+	}
+	if !repo.dailyTrendSince.Equal(time.Date(2026, 4, 11, 10, 30, 0, 0, time.UTC)) {
+		t.Fatalf("expected default since to be 2026-04-11T10:30:00Z, got %s", repo.dailyTrendSince.Format(time.RFC3339Nano))
+	}
+}
+
 func TestReportService_WrapsRepositoryErrors(t *testing.T) {
 	categoryErr := errors.New("category summary failed")
 	monthlyErr := errors.New("monthly trend failed")
+	dailyErr := errors.New("daily trend failed")
 	svc := NewReportService(&stubReportRepository{
 		categorySummaryErr: categoryErr,
 		monthlyTrendErr:    monthlyErr,
+		dailyTrendErr:      dailyErr,
 	})
 
 	_, err := svc.GetCategorySummary(context.Background(), 42, &models.ReportRequest{
@@ -150,6 +187,11 @@ func TestReportService_WrapsRepositoryErrors(t *testing.T) {
 	_, err = svc.GetMonthlyTrend(context.Background(), 42, 3)
 	if err == nil || !errors.Is(err, monthlyErr) || !strings.Contains(err.Error(), "failed to fetch monthly trend") {
 		t.Fatalf("expected wrapped monthly trend error, got %v", err)
+	}
+
+	_, err = svc.GetDailyTrend(context.Background(), 42, 7)
+	if err == nil || !errors.Is(err, dailyErr) || !strings.Contains(err.Error(), "failed to fetch daily trend") {
+		t.Fatalf("expected wrapped daily trend error, got %v", err)
 	}
 }
 

@@ -39,17 +39,3 @@ CREATE TABLE IF NOT EXISTS transactions (
     CONSTRAINT fk_transaction_sourcepayment FOREIGN KEY(sourcepayment_id) REFERENCES sourcepayment(id) ON DELETE CASCADE,
     CONSTRAINT fk_transaction_category FOREIGN KEY(category_id) REFERENCES categories(id) ON DELETE SET NULL
 );
-
--- Budgets (Ngân sách)
-CREATE TABLE IF NOT EXISTS budgets (
-    id BIGINT PRIMARY KEY,
-    user_id BIGINT NOT NULL,
-    category_id BIGINT NOT NULL,
-    amount DECIMAL(15, 2) NOT NULL,
-    start_date DATE NOT NULL,
-    end_date DATE NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_budget_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_budget_category FOREIGN KEY(category_id) REFERENCES categories(id) ON DELETE CASCADE
-);

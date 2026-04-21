@@ -2,6 +2,7 @@ package router
 
 import (
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/jmoiron/sqlx"
 	"github.com/maynguyen24/sever/configs"
 	"github.com/maynguyen24/sever/internal/handler"
@@ -20,6 +21,11 @@ func SetupRoutes(app *fiber.App, cfg *configs.Config, db *sqlx.DB) {
 	_ = i18n.LoadLocales("locales")
 
 	// 1. Global Middlewares
+	app.Use(cors.New(cors.Config{
+		AllowOrigins: "*",
+		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
+		AllowMethods: "GET, POST, PUT, DELETE, OPTIONS",
+	}))
 	app.Use(middleware.I18nMiddleware())
 
 	// Initialize MinIO Uploader
@@ -169,6 +175,7 @@ func SetupRoutes(app *fiber.App, cfg *configs.Config, db *sqlx.DB) {
 	reports := protected.Group("/reports")
 	reports.Post("/category-summary", reportHandler.GetCategorySummary)
 	reports.Post("/monthly-trend", reportHandler.GetMonthlyTrend)
+	reports.Post("/daily-trend", reportHandler.GetDailyTrend)
 	reports.Post("/income-category-breakdown", reportHandler.GetIncomeCategoryBreakdown)
 	reports.Post("/category-trend", reportHandler.GetCategoryTrend)
 

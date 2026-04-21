@@ -24,7 +24,7 @@ func testServerConfig() *configs.Config {
 		GoogleRedirectURL:       "http://localhost/callback",
 		WebAuthnRPID:            "localhost",
 		WebAuthnRPName:          "Test",
-		WebAuthnOrigin:          "http://localhost:3000",
+		WebAuthnOrigin:          "http://localhost:8000",
 		RedisAddr:               "127.0.0.1:0",
 		RedisPassword:           "",
 		FirebaseCredentialsPath: "",
